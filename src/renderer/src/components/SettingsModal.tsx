@@ -6,6 +6,7 @@ import {
   cleanError,
   prettifyHotkey
 } from '../utils/format'
+import { isMobile } from '../platform'
 import { ConfirmDialog } from './Dialogs'
 import { Dropdown } from './Dropdown'
 import { Modal } from './Modal'
@@ -335,7 +336,7 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast }: Sett
       >
         <div className="settings-layout">
           <nav className="settings-nav">
-            {TABS.map((item) => (
+            {(isMobile ? TABS.filter((item) => item.key !== 'mcp' && item.key !== 'security') : TABS).map((item) => (
               <button
                 key={item.key}
                 className={tab === item.key ? 'active' : ''}
@@ -560,6 +561,27 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast }: Sett
                     </button>
                   </div>
                 </div>
+                {!isMobile && (
+                  <label className="toggle-row">
+                    <input
+                      type="checkbox"
+                      checked={draft.general.closeToTray}
+                      onChange={(event) =>
+                        setDraft((previous) => ({
+                          ...previous,
+                          general: { ...previous.general, closeToTray: event.target.checked }
+                        }))
+                      }
+                      data-testid="setting-close-to-tray"
+                    />
+                    <span className="toggle-ui" />
+                    <span>
+                      <strong>关闭按钮最小化到托盘</strong>
+                      <small>关闭时隐藏到系统托盘，用快捷键或托盘图标重新打开</small>
+                    </span>
+                  </label>
+                )}
+                {!isMobile && (
                 <label className="field">
                   <span>全局唤起快捷键</span>
                   <div className="hotkey-row">
@@ -587,6 +609,7 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast }: Sett
                   </div>
                   <small>至少包含一个修饰键（Ctrl / Alt / Shift / Win）。</small>
                 </label>
+                )}
               </section>
             )}
 
@@ -646,6 +669,7 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast }: Sett
                     />
                   </label>
                 </div>
+                {!isMobile && (
                 <label className="field">
                   <span>备份加密密码（可选）</span>
                   <div className="input-with-action">
@@ -669,6 +693,12 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast }: Sett
                     非空时上传前用 AES-256-GCM 加密备份、从远端恢复时自动解密；加密密码只保存在本机，不会上传。
                   </small>
                 </label>
+                )}
+                {isMobile && (
+                  <p className="settings-desc">
+                    手机端暂不支持加密备份：如需跨设备同步，请在桌面端把加密密码留空，或只在桌面端使用加密备份。
+                  </p>
+                )}
                 <label className="toggle-row compact">
                   <input
                     type="checkbox"

@@ -1,4 +1,4 @@
-import type { AISettings } from '../shared/types'
+import type { AISettings } from './types'
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant'

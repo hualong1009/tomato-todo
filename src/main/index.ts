@@ -39,7 +39,7 @@ import {
   updateGroup,
   updateTodo
 } from '../shared/operations'
-import { callAIChat, listAIModels, testAIConnection } from './aiClient'
+import { callAIChat, listAIModels, testAIConnection } from '../shared/aiClient'
 import { appFetch } from './appFetch'
 import { hashPassword, verifyPassword } from './security'
 import { AppStore, type SettingsPatch } from './store'

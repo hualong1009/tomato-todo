@@ -1,6 +1,7 @@
 node_modules/
 out/
 dist/
+dist-mobile/
 release/
 *.log
 .DS_Store
@@ -9,3 +10,9 @@ Thumbs.db
 *.tsbuildinfo
 
 shot-*.png
+
+# Capacitor 构建产物
+android/app/src/main/assets/public/
+android/.gradle/
+android/app/build/
+android/build/

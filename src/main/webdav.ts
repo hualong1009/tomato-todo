@@ -1,3 +1,4 @@
+import { createRemotePayload } from '../shared/backup'
 import type { AppState, WebDAVSettings, WebDAVSyncResult, WebDAVTestResult } from '../shared/types'
 import { decryptBackup, encryptBackup, isEncryptedBackup } from './backupCrypto'
 
@@ -158,19 +159,7 @@ async function ensureRemoteDirectory(
   }
 }
 
-export function createRemotePayload(state: AppState): string {
-  return JSON.stringify(
-    {
-      version: 1,
-      app: 'tomato-todo',
-      savedAt: new Date().toISOString(),
-      groups: state.groups,
-      todos: state.todos
-    },
-    null,
-    2
-  )
-}
+export { createRemotePayload } from '../shared/backup'
 
 export async function uploadToWebDAV(
   settings: WebDAVSettings,

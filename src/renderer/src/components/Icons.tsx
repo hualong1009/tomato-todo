@@ -302,3 +302,9 @@ export const LockIcon = (props: IconProps) => (
     <circle cx="12" cy="15.2" r="1.2" />
   </svg>
 )
+
+export const MenuIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="M4 7h16M4 12h16M4 17h16" />
+  </svg>
+)
