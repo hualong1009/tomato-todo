@@ -1,0 +1,72 @@
+{
+  "name": "tomato-todo",
+  "version": "1.0.0",
+  "description": "番茄待办 - 桌面待办、分组、桌面便签、番茄钟与 AI 回顾",
+  "main": "./out/main/index.js",
+  "author": "Tomato Todo",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "start": "electron-vite preview",
+    "build": "npm run typecheck && electron-vite build && node scripts/build-mcp-entry.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "build:win": "npm run build && electron-builder --win",
+    "mcp": "node scripts/run-mcp.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "npm run build && node tests/e2e/electron-smoke.mjs && node tests/e2e/dropdown-ui.mjs && node tests/e2e/security.e2e.mjs && node tests/e2e/mcp-stdio.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "dompurify": "^3.4.17",
+    "marked": "^18.1.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.1.1",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "playwright-core": "^1.64.1",
+    "png-to-ico": "^3.0.2",
+    "sharp": "^0.35.5",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  },
+  "build": {
+    "appId": "com.tomato.todo",
+    "productName": "番茄待办",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "番茄待办"
+    },
+    "asarUnpack": [
+      "out/mcp-entry.cjs"
+    ]
+  }
+}

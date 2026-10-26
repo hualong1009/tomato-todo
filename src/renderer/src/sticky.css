@@ -1,0 +1,284 @@
+html.sticky-route,
+html.sticky-route body,
+html.sticky-route #root {
+  background: transparent !important;
+  overflow: hidden;
+}
+
+html.sticky-route body {
+  color: #242019;
+}
+
+.sticky-root {
+  height: 100vh;
+  padding: 8px;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+}
+
+.sticky-card {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  overflow: hidden;
+  backdrop-filter: blur(12px);
+  transition: background 0.25s ease;
+}
+
+.sticky-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.22), transparent 42%);
+  opacity: 0.55;
+}
+
+.sticky-card.translucent {
+  backdrop-filter: blur(18px) saturate(1.15);
+}
+
+.sticky-card.is-completed .sticky-title {
+  text-decoration: line-through;
+  opacity: 0.62;
+}
+
+.sticky-card.is-archived {
+  filter: grayscale(0.8);
+  opacity: 0.7;
+}
+
+.sticky-drag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 10px 0 14px;
+  -webkit-app-region: drag;
+  position: relative;
+  z-index: 2;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.sticky-brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  opacity: 0.66;
+}
+
+.sticky-urgency {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  opacity: 0.95;
+}
+
+.sticky-tools {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+}
+
+.sticky-tool {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+  transition: 0.16s ease;
+}
+
+.sticky-tool:hover {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.sticky-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 16px 8px;
+  position: relative;
+  z-index: 1;
+}
+
+.sticky-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  opacity: 0.7;
+  margin-bottom: 8px;
+}
+
+.sticky-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 700;
+  opacity: 1;
+}
+
+.sticky-status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.sticky-title {
+  margin: 0 0 8px;
+  font-size: 20px;
+  line-height: 1.28;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.sticky-content {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  opacity: 0.82;
+}
+
+.sticky-completed {
+  margin-top: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.66;
+  padding: 7px 9px;
+  border-radius: 9px;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.sticky-footer {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px 12px;
+}
+
+.sticky-check,
+.sticky-start {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  color: inherit;
+  border-radius: 9px;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.16s ease;
+}
+
+.sticky-check:hover,
+.sticky-start:hover {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.sticky-check.checked {
+  color: #178a5c;
+  border-color: rgba(23, 138, 92, 0.28);
+  background: rgba(78, 214, 156, 0.18);
+}
+
+.sticky-start {
+  color: #b45309;
+}
+
+.sticky-focus {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.65;
+}
+
+.sticky-palette {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 54px;
+  z-index: 5;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(18, 22, 32, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(16px);
+  animation: popIn 0.16s ease both;
+}
+
+.sticky-palette-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  opacity: 0.6;
+  margin-bottom: 8px;
+}
+
+.sticky-palette .opacity-field {
+  margin-top: 12px;
+  color: #dbe1f2;
+}
+
+.sticky-palette .opacity-field strong {
+  color: #fff;
+}
+
+.sticky-palette p {
+  margin: 8px 0 0;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: #8d96ad;
+}
+
+.sticky-palette .swatch {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.sticky-palette .swatch.selected {
+  outline-color: #fff;
+}
+
+.sticky-loading {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #dbe1f2;
+  font-size: 12px;
+  background: rgba(17, 22, 34, 0.94);
+  border-radius: 20px;
+  margin: 8px;
+}

@@ -1,0 +1,266 @@
+import type { AppState, WebDAVSettings, WebDAVSyncResult, WebDAVTestResult } from '../shared/types'
+import { decryptBackup, encryptBackup, isEncryptedBackup } from './backupCrypto'
+
+const PROPFIND_BODY =
+  '<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/></d:prop></d:propfind>'
+
+function normaliseBaseUrl(value: string): URL {
+  const trimmed = value.trim()
+  if (!trimmed) throw new Error('请填写 WebDAV 服务器地址')
+  let url: URL
+  try {
+    url = new URL(trimmed)
+  } catch {
+    throw new Error('WebDAV 服务器地址格式不正确')
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error('WebDAV 地址必须使用 http 或 https')
+  }
+  if (!url.pathname.endsWith('/')) url.pathname = `${url.pathname}/`
+  return url
+}
+
+export function buildRemoteFileUrl(settings: WebDAVSettings): string {
+  const base = normaliseBaseUrl(settings.url)
+  const remotePath = settings.remotePath.trim()
+  if (!remotePath) throw new Error('请填写远端文件路径')
+  if (/^https?:\/\//i.test(remotePath)) {
+    return new URL(remotePath).toString()
+  }
+  return new URL(remotePath.replace(/^\/+/, ''), base).toString()
+}
+
+function parentUrl(fileUrl: string): string {
+  const url = new URL(fileUrl)
+  const parts = url.pathname.split('/')
+  parts.pop()
+  url.pathname = `${parts.join('/')}/`
+  return url.toString()
+}
+
+function authHeaders(settings: WebDAVSettings): Record<string, string> {
+  if (!settings.username && !settings.password) return {}
+  const token = Buffer.from(`${settings.username}:${settings.password}`, 'utf8').toString('base64')
+  return { Authorization: `Basic ${token}` }
+}
+
+function describeStatus(status: number): string {
+  if (status === 401) return '认证失败（401），请检查用户名和密码'
+  if (status === 403) return '没有访问权限（403）'
+  if (status === 404) return '路径不存在（404）'
+  if (status === 405) return '服务器不允许该 WebDAV 操作（405）'
+  if (status === 409) return '父目录不存在（409）'
+  if (status === 507) return 'WebDAV 存储空间不足（507）'
+  return `WebDAV 请求失败（HTTP ${status}）`
+}
+
+async function propfind(
+  url: string,
+  settings: WebDAVSettings,
+  fetchImpl: typeof fetch
+): Promise<Response> {
+  return fetchImpl(url, {
+    method: 'PROPFIND',
+    headers: {
+      ...authHeaders(settings),
+      Depth: '0',
+      'Content-Type': 'application/xml; charset=utf-8'
+    },
+    body: PROPFIND_BODY,
+    signal: AbortSignal.timeout(20000)
+  })
+}
+
+export async function testWebDAV(
+  settings: WebDAVSettings,
+  fetchImpl: typeof fetch = fetch
+): Promise<WebDAVTestResult> {
+  try {
+    normaliseBaseUrl(settings.url)
+    const fileUrl = buildRemoteFileUrl(settings)
+    const dirUrl = parentUrl(fileUrl)
+    const response = await propfind(dirUrl, settings, fetchImpl)
+    if (response.ok || response.status === 207) {
+      return {
+        ok: true,
+        message: 'WebDAV 连接成功，远端目录可用',
+        status: response.status
+      }
+    }
+    if (response.status === 404) {
+      const base = normaliseBaseUrl(settings.url).toString()
+      const baseResponse = await propfind(base, settings, fetchImpl)
+      if (baseResponse.ok || baseResponse.status === 207) {
+        return {
+          ok: true,
+          message: 'WebDAV 连接成功；远端目录尚不存在，首次同步时会自动创建',
+          status: baseResponse.status
+        }
+      }
+      return {
+        ok: false,
+        message: describeStatus(baseResponse.status),
+        status: baseResponse.status
+      }
+    }
+    return { ok: false, message: describeStatus(response.status), status: response.status }
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : 'WebDAV 连接失败'
+    }
+  }
+}
+
+function directoryUrls(baseUrl: string, fileUrl: string): string[] {
+  const base = new URL(baseUrl)
+  const file = new URL(fileUrl)
+  const baseParts = base.pathname.split('/').filter(Boolean)
+  const fileParts = file.pathname.split('/').filter(Boolean)
+  fileParts.pop()
+  if (file.origin !== base.origin || fileParts.length < baseParts.length) {
+    return [parentUrl(fileUrl)]
+  }
+  if (baseParts.some((part, index) => fileParts[index] !== part)) {
+    return [parentUrl(fileUrl)]
+  }
+  const urls: string[] = []
+  let path = `/${baseParts.join('/')}`
+  if (path !== '/' && !path.endsWith('/')) path += '/'
+  for (const segment of fileParts.slice(baseParts.length)) {
+    path += `${segment}/`
+    urls.push(`${base.origin}${path}`)
+  }
+  return urls
+}
+
+async function ensureRemoteDirectory(
+  settings: WebDAVSettings,
+  fileUrl: string,
+  fetchImpl: typeof fetch
+): Promise<void> {
+  const baseUrl = normaliseBaseUrl(settings.url)
+  const urls = directoryUrls(baseUrl.toString(), fileUrl)
+  for (const url of urls) {
+    const response = await fetchImpl(url, {
+      method: 'MKCOL',
+      headers: authHeaders(settings),
+      signal: AbortSignal.timeout(20000)
+    })
+    if (response.status === 401) throw new Error(describeStatus(401))
+    if (response.status === 403) throw new Error(describeStatus(403))
+    if (response.status === 409) {
+      throw new Error('WebDAV 父目录不存在，无法创建远端目录')
+    }
+    if (response.status === 201 || response.status === 200 || response.status === 204) continue
+    if (response.status === 405) continue
+    if (response.status >= 500) throw new Error(describeStatus(response.status))
+  }
+}
+
+export function createRemotePayload(state: AppState): string {
+  return JSON.stringify(
+    {
+      version: 1,
+      app: 'tomato-todo',
+      savedAt: new Date().toISOString(),
+      groups: state.groups,
+      todos: state.todos
+    },
+    null,
+    2
+  )
+}
+
+export async function uploadToWebDAV(
+  settings: WebDAVSettings,
+  state: AppState,
+  fetchImpl: typeof fetch = fetch
+): Promise<WebDAVSyncResult> {
+  try {
+    const fileUrl = buildRemoteFileUrl(settings)
+    await ensureRemoteDirectory(settings, fileUrl, fetchImpl)
+    const encrypting = Boolean(settings.encryptionPassword)
+    const body: Buffer | string = encrypting
+      ? encryptBackup(createRemotePayload(state), settings.encryptionPassword)
+      : createRemotePayload(state)
+    const response = await fetchImpl(fileUrl, {
+      method: 'PUT',
+      headers: {
+        ...authHeaders(settings),
+        'Content-Type': encrypting
+          ? 'application/octet-stream'
+          : 'application/json; charset=utf-8'
+      },
+      body,
+      signal: AbortSignal.timeout(30000)
+    })
+    if (response.ok || response.status === 201 || response.status === 204) {
+      return {
+        ok: true,
+        message: encrypting ? '已加密保存到 WebDAV' : '已保存到 WebDAV',
+        at: new Date().toISOString()
+      }
+    }
+    return { ok: false, message: describeStatus(response.status) }
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : 'WebDAV 上传失败'
+    }
+  }
+}
+
+export async function downloadFromWebDAV(
+  settings: WebDAVSettings,
+  fetchImpl: typeof fetch = fetch
+): Promise<{
+  ok: boolean
+  message: string
+  raw?: unknown
+  at?: string
+}> {
+  try {
+    const fileUrl = buildRemoteFileUrl(settings)
+    const response = await fetchImpl(fileUrl, {
+      method: 'GET',
+      headers: authHeaders(settings),
+      signal: AbortSignal.timeout(30000)
+    })
+    if (response.status === 404) {
+      return { ok: false, message: '远端还没有备份文件' }
+    }
+    if (!response.ok) {
+      return { ok: false, message: describeStatus(response.status) }
+    }
+    const buffer = Buffer.from(await response.arrayBuffer())
+    let text: string
+    if (isEncryptedBackup(buffer)) {
+      try {
+        text = decryptBackup(buffer, settings.encryptionPassword)
+      } catch (error) {
+        return {
+          ok: false,
+          message:
+            error instanceof Error
+              ? `${error.message}，请检查设置中的 WebDAV 加密密码`
+              : '解密备份失败，请检查加密密码'
+        }
+      }
+    } else {
+      text = buffer.toString('utf8')
+    }
+    let raw: unknown
+    try {
+      raw = JSON.parse(text)
+    } catch {
+      return { ok: false, message: '远端文件不是有效的待办数据' }
+    }
+    return { ok: true, message: '已从 WebDAV 读取备份', raw, at: new Date().toISOString() }
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : 'WebDAV 下载失败'
+    }
+  }
+}

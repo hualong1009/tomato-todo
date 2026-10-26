@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#111a33"/>
+      <stop offset="0.55" stop-color="#0b1020"/>
+      <stop offset="1" stop-color="#1b0f1c"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.68" cy="0.25" r="0.8">
+      <stop offset="0" stop-color="#ff625c" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#ff625c" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="0.2" cy="0.9" r="0.65">
+      <stop offset="0" stop-color="#5aa2ff" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#5aa2ff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="tomato" x1="0" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#ff7a6f"/>
+      <stop offset="0.5" stop-color="#ff5148"/>
+      <stop offset="1" stop-color="#d9273c"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#93f0a5"/>
+      <stop offset="1" stop-color="#37b96a"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="26" stdDeviation="30" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+  <rect x="30" y="30" width="964" height="964" rx="228" fill="url(#bg)"/>
+  <rect x="30" y="30" width="964" height="964" rx="228" fill="url(#glow)"/>
+  <rect x="30" y="30" width="964" height="964" rx="228" fill="url(#glow2)"/>
+  <circle cx="806" cy="806" r="210" fill="#5aa2ff" opacity="0.07"/>
+  <circle cx="180" cy="200" r="130" fill="#ffb45c" opacity="0.08"/>
+  <g filter="url(#shadow)" transform="translate(179 242) scale(18.5)">
+    <path fill="url(#tomato)" d="M22.494 5.344c-.687 0-1.352.066-1.991.177-.819-.104-2.74-.231-3.591-.231-8.473 0-15.886 3.177-15.886 14.298 0 9.036 7.049 16.361 16.976 16.361s17.974-7.325 17.974-16.361C35.975 8.339 26.59 5.344 22.494 5.344z"/>
+    <path fill="url(#leaf)" d="M8.439.091c1.637 1.636 2.77 2.266 3.274 4.91.298 1.564 2.266 1.51 2.266 1.51s-3.903 1.763-5.54 3.4c0 0 4.91-1.637 6.547-1.637 0 0 3.273 1.637 3.273 3.273 0 0 0-3.273-1.636-3.273 0 0 4.909 0 4.909 3.273 0 0 0-4.91-1.637-4.91 0 0 4.911-1.636 6.548 0 0 0-1.686-1.72-4.911-1.636 0 0 1.638-1.637 4.911-1.637 0 0-5.288-1.511-6.925 1.763 0 0-1.385-1.385 1.385-4.155 0 0-4.28.755-4.28 4.029 0 0-1.552-.04-2.644-1.259C11.838 1.35 8.439.091 8.439.091z"/>
+  </g>
+  <g fill="#ffffff" opacity="0.75">
+    <path d="M812 230l11 30 30 11-30 11-11 30-11-30-30-11 30-11 11-30z"/>
+    <circle cx="208" cy="762" r="9"/>
+  </g>
+</svg>
