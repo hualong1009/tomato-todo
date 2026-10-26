@@ -1,4 +1,12 @@
+import { collectBlobRefs } from './blobRefs'
 import type { AppState, Group, Todo } from './types'
+
+export interface RemoteAsset {
+  /** blobs/ 目录下的文件名（内容寻址） */
+  name: string
+  /** 原始字节数，便于恢复时校验 */
+  size?: number
+}
 
 export interface RemotePayload {
   version: number
@@ -6,6 +14,8 @@ export interface RemotePayload {
   savedAt: string
   groups: Group[]
   todos: Todo[]
+  /** 外置的图片/附件清单；为空表示所有内容都内嵌在 todos 里 */
+  assets?: RemoteAsset[]
 }
 
 /** WebDAV 备份内容：只包含待办与分组，不包含任何密钥或本机设置。 */
@@ -17,6 +27,23 @@ export function createRemotePayload(state: AppState): string {
       savedAt: new Date().toISOString(),
       groups: state.groups,
       todos: state.todos
+    },
+    null,
+    2
+  )
+}
+
+/** 生成带外置资源清单的备份内容（WebDAV 拆分同步用）。 */
+export function createRemotePayloadWith(state: AppState, todos: Todo[]): string {
+  const assets = collectBlobRefs(todos).map((name) => ({ name }))
+  return JSON.stringify(
+    {
+      version: 2,
+      app: 'tomato-todo',
+      savedAt: new Date().toISOString(),
+      groups: state.groups,
+      todos,
+      assets
     },
     null,
     2
@@ -39,6 +66,11 @@ export function parseRemotePayload(text: string): RemotePayload | null {
     app: 'tomato-todo',
     savedAt: typeof source.savedAt === 'string' ? source.savedAt : new Date().toISOString(),
     groups: Array.isArray(source.groups) ? source.groups : [],
-    todos: source.todos
+    todos: source.todos,
+    assets: Array.isArray(source.assets)
+      ? source.assets.filter((item): item is RemoteAsset =>
+          Boolean(item && typeof item === 'object' && typeof (item as RemoteAsset).name === 'string')
+        )
+      : []
   }
 }

@@ -8,6 +8,7 @@ import {
   testWebDAV,
   uploadToWebDAV
 } from '../src/main/webdav'
+import { createRemotePayloadWith } from '../src/shared/backup'
 import { createTodo } from '../src/shared/operations'
 import type { WebDAVSettings } from '../src/shared/types'
 import { makeState } from './helpers'
@@ -267,5 +268,114 @@ describe('WebDAV 备份加密', () => {
     const result = await downloadFromWebDAV(settings())
     expect(result.ok).toBe(true)
     expect(JSON.stringify(result.raw)).toContain('旧版明文备份')
+  })
+})
+
+describe('WebDAV 图片/附件拆分同步', () => {
+  const PNG =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+
+  function stateWithImage() {
+    const state = makeState()
+    createTodo(state, {
+      title: '带图任务',
+      content: `正文\n\n![截图](${PNG})`,
+      groupId: 'inbox'
+    })
+    return state
+  }
+
+  it('上传时把图片拆到 blobs/，主文件里只剩引用', async () => {
+    const state = stateWithImage()
+    const calls = mockFetch((call) => {
+      if (call.method === 'PROPFIND' && call.url.includes('/blobs/')) {
+        return new Response(
+          '<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/blobs/</d:href></d:response></d:multistatus>',
+          { status: 207 }
+        )
+      }
+      return new Response(null, { status: 201 })
+    })
+
+    const result = await uploadToWebDAV(settings(), state)
+    expect(result.ok).toBe(true)
+    expect(result.message).toContain('外置 1 个图片/附件')
+
+    const blobPut = calls.find((call) => call.method === 'PUT' && call.url.includes('/blobs/'))
+    expect(blobPut?.url).toMatch(/\/tomato-todo\/blobs\/[a-f0-9]{16}\.png$/)
+    expect(blobPut?.body).toBe(PNG)
+
+    const manifestPut = calls.find((call) => call.method === 'PUT' && call.url.endsWith('data.json'))
+    expect(manifestPut?.body).toContain('blob:')
+    expect(manifestPut?.body).not.toContain('base64')
+    expect(manifestPut?.body).toContain('"assets"')
+  })
+
+  it('远端已存在的 blob 不会重复上传', async () => {
+    const state = stateWithImage()
+    const { blobs } = (await import('../src/main/blobSync')).externaliseAssets(state.todos)
+    const existingName = [...blobs.keys()][0]
+    const calls = mockFetch((call) => {
+      if (call.method === 'PROPFIND' && call.url.includes('/blobs/')) {
+        return new Response(
+          `<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/blobs/${existingName}</d:href></d:response></d:multistatus>`,
+          { status: 207 }
+        )
+      }
+      return new Response(null, { status: 201 })
+    })
+
+    const result = await uploadToWebDAV(settings(), state)
+    expect(result.ok).toBe(true)
+    expect(result.message).toContain('复用 1')
+    expect(calls.filter((call) => call.method === 'PUT' && call.url.includes('/blobs/'))).toHaveLength(0)
+  })
+
+  it('恢复时下载 blobs 并回填成内嵌图片', async () => {
+    const state = stateWithImage()
+    const { todos, blobs } = (await import('../src/main/blobSync')).externaliseAssets(state.todos)
+    const manifest = createRemotePayloadWith(state, todos)
+    const [blobName, blobData] = [...blobs.entries()][0]
+    mockFetch((call) => {
+      if (call.method === 'GET' && call.url.endsWith('data.json')) {
+        return new Response(manifest, { status: 200 })
+      }
+      if (call.method === 'GET' && call.url.includes('/blobs/')) {
+        return new Response(blobData, { status: 200 })
+      }
+      return new Response('', { status: 404 })
+    })
+
+    const result = await downloadFromWebDAV(settings())
+    expect(result.ok).toBe(true)
+    const raw = result.raw as { todos: { content: string }[] }
+    expect(raw.todos[0].content).toContain('data:image/png;base64,')
+    expect(raw.todos[0].content).not.toContain('blob:')
+  })
+
+  it('blob 缺失时仍能恢复，并提示数量', async () => {
+    const state = stateWithImage()
+    const { todos } = (await import('../src/main/blobSync')).externaliseAssets(state.todos)
+    const manifest = createRemotePayloadWith(state, todos)
+    mockFetch((call) => {
+      if (call.method === 'GET' && call.url.endsWith('data.json')) {
+        return new Response(manifest, { status: 200 })
+      }
+      return new Response('', { status: 404 })
+    })
+
+    const result = await downloadFromWebDAV(settings())
+    expect(result.ok).toBe(true)
+    expect(result.message).toContain('1 个图片/附件下载失败')
+  })
+
+  it('关闭拆分开关时退化为单文件备份', async () => {
+    const state = stateWithImage()
+    const calls = mockFetch(() => new Response(null, { status: 201 }))
+    const result = await uploadToWebDAV(settings({ splitAssets: false }), state)
+    expect(result.ok).toBe(true)
+    expect(calls.every((call) => !call.url.includes('/blobs/'))).toBe(true)
+    const manifestPut = calls.find((call) => call.method === 'PUT' && call.url.endsWith('data.json'))
+    expect(manifestPut?.body).toContain('base64')
   })
 })

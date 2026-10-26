@@ -747,6 +747,21 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast }: Sett
                     手机端暂不支持加密备份：如需跨设备同步，请在桌面端把加密密码留空，或只在桌面端使用加密备份。
                   </p>
                 )}
+                {!isMobile && (
+                  <label className="toggle-row compact">
+                    <input
+                      type="checkbox"
+                      checked={draft.webdav.splitAssets !== false}
+                      onChange={(event) => updateWebdav({ splitAssets: event.target.checked })}
+                      data-testid="setting-webdav-split-assets"
+                    />
+                    <span className="toggle-ui" />
+                    <span>
+                      <strong>图片与附件拆分上传</strong>
+                      <small>正文图片、附件单独存到 blobs/，主备份文件保持几百 KB，且同一文件只传一次</small>
+                    </span>
+                  </label>
+                )}
                 <label className="toggle-row compact">
                   <input
                     type="checkbox"

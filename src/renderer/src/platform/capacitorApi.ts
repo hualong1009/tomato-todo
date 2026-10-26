@@ -27,6 +27,7 @@ import {
 } from '../../../shared/operations'
 import { buildExportMarkdown } from '../../../shared/markdownExport'
 import { splitDataUrl } from '../../../shared/attachments'
+import { collectBlobRefs, inlineAttachmentRefs, inlineBlobRefs } from '../../../shared/blobRefs'
 import { buildSummaryContext } from '../../../shared/summary'
 import type {
   AddTodoInput,
@@ -260,12 +261,42 @@ async function restoreWebDAV(): Promise<WebDAVSyncResult> {
     }
     const payload = parseRemotePayload(text)
     if (!payload) return { ok: false, message: '远端文件不是有效的待办数据' }
-    state = normaliseState({ groups: payload.groups, todos: payload.todos, settings: state.settings })
+    let todos = payload.todos
+    let assetsNote = ''
+    const refs = collectBlobRefs(todos)
+    if (refs.length > 0) {
+      // 电脑端把图片/附件外置成 blobs/，手机端恢复时按需拉回归一化
+      const base = url.replace(/[^/]*$/, '')
+      const cache = new Map<string, string | null>()
+      let missing = 0
+      for (const name of refs) {
+        try {
+          const blobResponse = await request(`${base}blobs/${name}`, { headers: authHeaders(settings) })
+          if (!blobResponse.ok) {
+            cache.set(name, null)
+            missing += 1
+            continue
+          }
+          cache.set(name, await blobResponse.text())
+        } catch {
+          cache.set(name, null)
+          missing += 1
+        }
+      }
+      const resolve = (name: string): string | null => cache.get(name) ?? null
+      todos = todos.map((todo) => ({
+        ...todo,
+        content: inlineBlobRefs(todo.content, resolve),
+        attachments: inlineAttachmentRefs(todo.attachments ?? [], resolve)
+      }))
+      if (missing > 0) assetsNote = `，${missing} 个图片/附件下载失败`
+    }
+    state = normaliseState({ groups: payload.groups, todos, settings: state.settings })
     emit()
     await persistNow()
     return {
       ok: true,
-      message: `已从 WebDAV 恢复（${payload.todos.length} 条待办）`,
+      message: `已从 WebDAV 恢复（${payload.todos.length} 条待办）${assetsNote}`,
       at: payload.savedAt
     }
   } catch (error) {

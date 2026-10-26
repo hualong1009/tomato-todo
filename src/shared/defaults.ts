@@ -108,6 +108,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     password: '',
     autoUpload: true,
     encryptionPassword: '',
+    splitAssets: true,
     lastSyncAt: null,
     lastStatus: 'idle',
     lastError: null

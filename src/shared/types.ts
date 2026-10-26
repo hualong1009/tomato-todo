@@ -100,6 +100,8 @@ export interface WebDAVSettings {
   autoUpload: boolean
   /** 非空时上传前用该密码加密备份，下载后用该密码解密 */
   encryptionPassword: string
+  /** 是否把正文图片与附件拆成 blobs/ 单独上传（默认开启，避免单文件过大） */
+  splitAssets?: boolean
   lastSyncAt: string | null
   lastStatus: WebDAVStatus
   lastError: string | null
