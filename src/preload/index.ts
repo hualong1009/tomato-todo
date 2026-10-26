@@ -55,6 +55,8 @@ const api: TomatoAPI = {
   restoreWebDAV: () => ipcRenderer.invoke('webdav:restore'),
 
   exportMarkdown: (input: MarkdownExportInput) => ipcRenderer.invoke('export:markdown', input),
+  saveAttachment: (input: { name: string; dataUrl: string }) =>
+    ipcRenderer.invoke('attachment:save', input),
   exportLocalBackup: (options?: { path?: string }) => ipcRenderer.invoke('backup:export', options),
   importLocalBackup: (options?: { path?: string }) => ipcRenderer.invoke('backup:import', options),
 

@@ -27,6 +27,20 @@ export interface FocusSession {
   minutes: number
 }
 
+/** 待办附件：二进制内容以 data URL（base64）内嵌，便于随 JSON 备份一起完整导出。 */
+export interface Attachment {
+  id: string
+  /** 原始文件名，例如 需求文档.pdf */
+  name: string
+  /** MIME 类型，例如 application/pdf */
+  mime: string
+  /** 字节数（用于展示与校验） */
+  size: number
+  /** data:<mime>;base64,<...> */
+  data: string
+  createdAt: string
+}
+
 export interface Todo {
   id: string
   title: string
@@ -50,6 +64,8 @@ export interface Todo {
   stickyColor: string
   stickyOpacity: number
   stickyBounds?: WindowBounds
+  /** 附件列表，可随备份完整导出 */
+  attachments: Attachment[]
 }
 
 export interface AISettings {
@@ -140,6 +156,7 @@ export interface UpdateTodoPatch {
   stickyColor?: string
   stickyOpacity?: number
   stickyBounds?: WindowBounds
+  attachments?: Attachment[]
 }
 
 export interface AIRequestResult {

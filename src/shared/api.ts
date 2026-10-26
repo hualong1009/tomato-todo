@@ -50,6 +50,8 @@ export interface TomatoAPI {
   restoreWebDAV(): Promise<WebDAVSyncResult>
 
   exportMarkdown(input: MarkdownExportInput): Promise<FileActionResult>
+  /** 把附件保存到本地（桌面端弹出保存对话框，手机端走分享/下载） */
+  saveAttachment(input: { name: string; dataUrl: string }): Promise<FileActionResult>
   exportLocalBackup(options?: { path?: string }): Promise<FileActionResult>
   importLocalBackup(options?: { path?: string }): Promise<FileActionResult>
 

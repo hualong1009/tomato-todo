@@ -384,6 +384,12 @@ export const DownloadIcon = (props: IconProps) => (
   </svg>
 )
 
+export const PaperclipIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="M9.5 14.5 15 9a2.5 2.5 0 0 1 3.5 3.5l-6.4 6.4a4.5 4.5 0 0 1-6.4-6.4l6.6-6.6a3 3 0 0 1 4.2 4.2l-6.4 6.4a1.5 1.5 0 0 1-2.1-2.1l5.4-5.4" />
+  </svg>
+)
+
 export const UploadIcon = (props: IconProps) => (
   <svg {...base(props)}>
     <path d="M12 20V10m0 0l-4 4m4-4l4 4" />

@@ -47,7 +47,22 @@ try {
   // 打开详情面板，切换状态和分组
   await page.click('[data-testid="todo-item"]')
   await page.waitForSelector('[data-testid="detail-panel"]')
-  assert.equal(await page.locator('[data-testid="detail-title"]').inputValue(), 'E2E 冒烟任务')
+  assert.equal(
+    await page.locator('[data-testid="detail-title-view"]').innerText(),
+    'E2E 冒烟任务'
+  )
+  // 详情默认是只读预览：编辑框不存在，点铅笔图标后才出现
+  assert.equal(await page.locator('[data-testid="detail-content"]').count(), 0)
+  await page.click('[data-testid="detail-edit"]')
+  await page.waitForSelector('[data-testid="detail-content"]')
+  await page.fill('[data-testid="detail-content"]', '预览改编辑的正文')
+  await page.click('[data-testid="detail-save"]')
+  await page.waitForSelector('[data-testid="detail-content-view"]')
+  await page.waitForTimeout(250)
+  assert.match(
+    await page.locator('[data-testid="detail-content-view"]').innerText(),
+    /预览改编辑的正文/
+  )
   await page.click('[data-testid="detail-check"]')
   await page.waitForTimeout(250)
   assert.equal(await page.locator('[data-testid="detail-check"]').getAttribute('aria-checked'), 'false')

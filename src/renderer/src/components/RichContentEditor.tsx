@@ -19,6 +19,10 @@ export interface RichContentEditorProps {
   disabled?: boolean
   placeholder?: string
   onChange: (value: string) => void
+  /** Ctrl+S 触发（由外层负责保存） */
+  onRequestSave?: () => void
+  /** Esc 触发（由外层负责取消） */
+  onRequestCancel?: () => void
   /** 测试用属性透传 */
   'data-testid'?: string
 }
@@ -72,6 +76,8 @@ export function RichContentEditor({
   disabled,
   placeholder,
   onChange,
+  onRequestSave,
+  onRequestCancel,
   'data-testid': testId = 'detail-content'
 }: RichContentEditorProps) {
   const [mode, setMode] = useState<Mode>('edit')
@@ -177,9 +183,17 @@ export function RichContentEditor({
   }
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Escape' && onRequestCancel) {
+      event.preventDefault()
+      onRequestCancel()
+      return
+    }
     if (!(event.ctrlKey || event.metaKey)) return
     const key = event.key.toLowerCase()
-    if (key === 'b') {
+    if (key === 's' && onRequestSave) {
+      event.preventDefault()
+      onRequestSave()
+    } else if (key === 'b') {
       event.preventDefault()
       runTool('bold')
     } else if (key === 'i') {

@@ -5,6 +5,34 @@ import { decryptBackup, encryptBackup, isEncryptedBackup } from './backupCrypto'
 const PROPFIND_BODY =
   '<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/></d:prop></d:propfind>'
 
+/** 探测/建目录等轻量请求的超时时间。 */
+const META_TIMEOUT_MS = 20000
+/** 上传下载整份备份的超时时间；备份可能含内嵌图片，给足时间。 */
+export const TRANSFER_TIMEOUT_MS = 120000
+/** 传输类请求失败后的重试次数（网络抖动/超时各重试一次）。 */
+const TRANSFER_RETRIES = 1
+
+function isRetryableError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  if (error.name === 'TimeoutError' || error.name === 'AbortError') return true
+  return /fetch failed|network|socket|ECONNRESET|ETIMEDOUT|EAI_AGAIN|terminated/i.test(error.message)
+}
+
+/** 传输请求：使用长超时，网络类失败自动重试一次。 */
+async function transferRequest(doFetch: () => Promise<Response>): Promise<Response> {
+  let lastError: unknown
+  for (let attempt = 0; attempt <= TRANSFER_RETRIES; attempt += 1) {
+    try {
+      return await doFetch()
+    } catch (error) {
+      lastError = error
+      if (attempt === TRANSFER_RETRIES || !isRetryableError(error)) break
+      await new Promise((resolve) => setTimeout(resolve, 800))
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('WebDAV 请求失败')
+}
+
 function normaliseBaseUrl(value: string): URL {
   const trimmed = value.trim()
   if (!trimmed) throw new Error('请填写 WebDAV 服务器地址')
@@ -45,6 +73,13 @@ function authHeaders(settings: WebDAVSettings): Record<string, string> {
   return { Authorization: `Basic ${token}` }
 }
 
+/** 把字节数格式化成可读文本（用于同步结果提示）。 */
+export function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+}
+
 function describeStatus(status: number): string {
   if (status === 401) return '认证失败（401），请检查用户名和密码'
   if (status === 403) return '没有访问权限（403）'
@@ -68,7 +103,7 @@ async function propfind(
       'Content-Type': 'application/xml; charset=utf-8'
     },
     body: PROPFIND_BODY,
-    signal: AbortSignal.timeout(20000)
+    signal: AbortSignal.timeout(META_TIMEOUT_MS)
   })
 }
 
@@ -146,7 +181,7 @@ async function ensureRemoteDirectory(
     const response = await fetchImpl(url, {
       method: 'MKCOL',
       headers: authHeaders(settings),
-      signal: AbortSignal.timeout(20000)
+      signal: AbortSignal.timeout(META_TIMEOUT_MS)
     })
     if (response.status === 401) throw new Error(describeStatus(401))
     if (response.status === 403) throw new Error(describeStatus(403))
@@ -170,24 +205,32 @@ export async function uploadToWebDAV(
     const fileUrl = buildRemoteFileUrl(settings)
     await ensureRemoteDirectory(settings, fileUrl, fetchImpl)
     const encrypting = Boolean(settings.encryptionPassword)
+    const payload = createRemotePayload(state)
+    const rawSize = Buffer.byteLength(payload, 'utf8')
     const body: Buffer | string = encrypting
-      ? encryptBackup(createRemotePayload(state), settings.encryptionPassword)
-      : createRemotePayload(state)
-    const response = await fetchImpl(fileUrl, {
-      method: 'PUT',
-      headers: {
-        ...authHeaders(settings),
-        'Content-Type': encrypting
-          ? 'application/octet-stream'
-          : 'application/json; charset=utf-8'
-      },
-      body,
-      signal: AbortSignal.timeout(30000)
-    })
+      ? encryptBackup(payload, settings.encryptionPassword)
+      : payload
+    const bodySize = typeof body === 'string' ? rawSize : body.byteLength
+    const response = await transferRequest(() =>
+      fetchImpl(fileUrl, {
+        method: 'PUT',
+        headers: {
+          ...authHeaders(settings),
+          'Content-Type': encrypting
+            ? 'application/octet-stream'
+            : 'application/json; charset=utf-8'
+        },
+        body,
+        signal: AbortSignal.timeout(TRANSFER_TIMEOUT_MS)
+      })
+    )
     if (response.ok || response.status === 201 || response.status === 204) {
+      const savedText = `${formatSize(bodySize)}${encrypting ? `（原始 ${formatSize(rawSize)}）` : ''}`
       return {
         ok: true,
-        message: encrypting ? '已加密保存到 WebDAV' : '已保存到 WebDAV',
+        message: encrypting
+          ? `已加密压缩保存到 WebDAV，共 ${savedText}`
+          : `已保存到 WebDAV，共 ${savedText}`,
         at: new Date().toISOString()
       }
     }
@@ -211,11 +254,13 @@ export async function downloadFromWebDAV(
 }> {
   try {
     const fileUrl = buildRemoteFileUrl(settings)
-    const response = await fetchImpl(fileUrl, {
-      method: 'GET',
-      headers: authHeaders(settings),
-      signal: AbortSignal.timeout(30000)
-    })
+    const response = await transferRequest(() =>
+      fetchImpl(fileUrl, {
+        method: 'GET',
+        headers: authHeaders(settings),
+        signal: AbortSignal.timeout(TRANSFER_TIMEOUT_MS)
+      })
+    )
     if (response.status === 404) {
       return { ok: false, message: '远端还没有备份文件' }
     }

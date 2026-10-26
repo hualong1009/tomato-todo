@@ -157,7 +157,8 @@ export function createTodo(state: AppState, input: AddTodoInput): Todo {
     focusMinutes: 0,
     focusLog: [],
     stickyColor: DEFAULT_STICKY_COLOR,
-    stickyOpacity: DEFAULT_STICKY_OPACITY
+    stickyOpacity: DEFAULT_STICKY_OPACITY,
+    attachments: []
   }
   state.todos.unshift(todo)
   return todo
@@ -220,6 +221,9 @@ export function updateTodo(state: AppState, id: string, patch: UpdateTodoPatch):
   }
   if (patch.stickyBounds !== undefined) {
     todo.stickyBounds = normaliseBounds(patch.stickyBounds)
+  }
+  if (patch.attachments !== undefined) {
+    todo.attachments = patch.attachments
   }
 
   todo.updatedAt = ISO_NOW()

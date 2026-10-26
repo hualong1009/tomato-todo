@@ -97,7 +97,15 @@ function serialiseTodo(
     pinned: todo.pinned,
     pomodoroCount: todo.pomodoroCount,
     focusMinutes: todo.focusMinutes,
-    recentFocusSessions: todo.focusLog.slice(-5)
+    recentFocusSessions: todo.focusLog.slice(-5),
+    // 附件只暴露元信息，避免把 base64 内容塞进 MCP 响应
+    attachments: todo.attachments.map((item) => ({
+      id: item.id,
+      name: item.name,
+      mime: item.mime,
+      size: item.size,
+      createdAt: item.createdAt
+    }))
   }
 }
 

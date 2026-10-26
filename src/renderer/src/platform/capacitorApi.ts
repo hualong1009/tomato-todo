@@ -26,6 +26,7 @@ import {
   updateTodo
 } from '../../../shared/operations'
 import { buildExportMarkdown } from '../../../shared/markdownExport'
+import { splitDataUrl } from '../../../shared/attachments'
 import { buildSummaryContext } from '../../../shared/summary'
 import type {
   AddTodoInput,
@@ -50,7 +51,13 @@ import type {
 
 const STORAGE_KEY = 'tomato-todo-data'
 const SAVE_DEBOUNCE_MS = 250
-const ENCRYPTED_MAGIC = 'TTENC1'
+/** 加密备份文件头（TTENC1 = 旧格式，TTENC2 = gzip 压缩后的新格式）。 */
+const ENCRYPTED_MAGICS = ['TTENC1', 'TTENC2'] as const
+
+function looksEncrypted(text: string): boolean {
+  const head = text.trimStart()
+  return ENCRYPTED_MAGICS.some((magic) => head.startsWith(magic))
+}
 
 const stateListeners = new Set<(state: AppState) => void>()
 const eventListeners = new Set<(event: AppEvent) => void>()
@@ -248,7 +255,7 @@ async function restoreWebDAV(): Promise<WebDAVSyncResult> {
     if (response.status === 404) return { ok: false, message: '远端没有找到备份文件' }
     if (!response.ok) return { ok: false, message: `下载失败：HTTP ${response.status}` }
     const text = await response.text()
-    if (text.trimStart().startsWith(ENCRYPTED_MAGIC)) {
+    if (looksEncrypted(text)) {
       return { ok: false, message: '远端是加密备份，手机端暂不支持恢复加密备份' }
     }
     const payload = parseRemotePayload(text)
@@ -399,6 +406,37 @@ export function createCapacitorApi(): TomatoAPI {
     uploadWebDAV,
     restoreWebDAV,
 
+    saveAttachment: async (input: { name: string; dataUrl: string }): Promise<FileActionResult> => {
+      const name = (input?.name ?? '').trim() || 'attachment'
+      const parts = splitDataUrl(input?.dataUrl ?? '')
+      if (!parts || !parts.base64) return { ok: false, message: '附件内容无效，无法保存' }
+      try {
+        const binary = atob(parts.base64)
+        const bytes = new Uint8Array(binary.length)
+        for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
+        const blob = new Blob([bytes], { type: parts.mime })
+        const file = new File([blob], name, { type: parts.mime })
+        const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean; share?: (data: ShareData) => Promise<void> }
+        if (nav.share && nav.canShare?.({ files: [file] })) {
+          await nav.share({ files: [file], title: name })
+          return { ok: true, message: `已分享 ${name}` }
+        }
+        const url = URL.createObjectURL(blob)
+        const anchor = document.createElement('a')
+        anchor.href = url
+        anchor.download = name
+        document.body.appendChild(anchor)
+        anchor.click()
+        anchor.remove()
+        setTimeout(() => URL.revokeObjectURL(url), 5000)
+        return { ok: true, message: `已保存 ${name}` }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '保存附件失败'
+        if (/cancel|abort/i.test(message)) return { ok: false, message: '已取消保存' }
+        return { ok: false, message }
+      }
+    },
+
     exportMarkdown: async (input: MarkdownExportInput): Promise<FileActionResult> => {
       await loadState()
       const scope = input.scope === 'selected' ? 'selected' : 'all'
@@ -443,7 +481,7 @@ export function createCapacitorApi(): TomatoAPI {
       await loadState()
       const text = await readClipboardText()
       if (!text) return { ok: false, message: '剪贴板里没有备份内容' }
-      if (text.trimStart().startsWith(ENCRYPTED_MAGIC)) {
+      if (looksEncrypted(text)) {
         return { ok: false, message: '剪贴板里是加密备份，手机端暂不支持解密，请在电脑端导入' }
       }
       const payload = parseRemotePayload(text)

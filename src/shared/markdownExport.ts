@@ -12,6 +12,25 @@ export interface ExportImage {
 export interface MarkdownExportResult {
   markdown: string
   images: ExportImage[]
+  /** 附件（写入 attachments/ 目录并链接），保证导出包含完整文件 */
+  files: ExportImage[]
+}
+
+/** 抽取正文内嵌图片的结果。 */
+export interface ExtractedContent {
+  markdown: string
+  images: ExportImage[]
+}
+
+/** 把文件名转成适合写盘的名字：去掉路径分隔符与危险字符。 */
+function safeFileName(name: string): string {
+  return (
+    name
+      .replace(/[\\/:*?"<>|]/g, '_')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 80) || 'attachment'
+  )
 }
 
 const DATA_URL_PATTERN = /!\[([^\]]*)\]\((data:image\/([a-z0-9.+-]+);base64,[A-Za-z0-9+/=\s]+)\)/gi
@@ -31,7 +50,7 @@ export function extractInlineImages(
   markdown: string,
   assetsDirName = 'attachments',
   namePrefix = ''
-): MarkdownExportResult {
+): ExtractedContent {
   const images: ExportImage[] = []
   const replaced = markdown.replace(DATA_URL_PATTERN, (_match, alt: string, dataUrl: string, mime: string) => {
     const image: ExportImage = {
@@ -58,7 +77,7 @@ export function buildTodoMarkdown(
   group: Group | undefined,
   assetsDirName = 'attachments',
   namePrefix = ''
-): { markdown: string; images: ExportImage[] } {
+): { markdown: string; images: ExportImage[]; files: ExportImage[] } {
   const status = getTodoStatus(todo)
   const lines: string[] = []
   lines.push(`## ${todo.archivedAt ? '🗄️ ' : todo.completedAt ? '✅ ' : '📌 '}${todo.title}`)
@@ -85,6 +104,17 @@ export function buildTodoMarkdown(
     lines.push(extracted.markdown)
     lines.push('')
   }
+  const files: ExportImage[] = []
+  if (todo.attachments.length > 0) {
+    lines.push('### 附件')
+    lines.push('')
+    todo.attachments.forEach((attachment, index) => {
+      const fileName = `${namePrefix}${index + 1}-${safeFileName(attachment.name)}`
+      files.push({ name: fileName, dataUrl: attachment.data })
+      lines.push(`- [${attachment.name}](./${assetsDirName}/${fileName}) · ${attachment.size} B`)
+    })
+    lines.push('')
+  }
   if (todo.focusLog.length > 0) {
     const recent = todo.focusLog.slice(-10)
     lines.push('<details><summary>专注记录（最近 10 次）</summary>')
@@ -94,7 +124,7 @@ export function buildTodoMarkdown(
     lines.push('</details>')
     lines.push('')
   }
-  return { markdown: lines.join('\n'), images }
+  return { markdown: lines.join('\n'), images, files }
 }
 
 export interface BuildExportOptions {
@@ -120,6 +150,7 @@ export function buildExportMarkdown(
   })
   const groupMap = new Map(state.groups.map((group) => [group.id, group]))
   const images: ExportImage[] = []
+  const files: ExportImage[] = []
 
   const lines: string[] = []
   lines.push(`# ${options.title ?? '番茄待办导出'}`)
@@ -152,6 +183,7 @@ export function buildExportMarkdown(
       lines.push('---')
       lines.push('')
       images.push(...built.images)
+      files.push(...built.files)
     }
   }
 
@@ -160,5 +192,5 @@ export function buildExportMarkdown(
     lines.push('')
   }
 
-  return { markdown: lines.join('\n'), images }
+  return { markdown: lines.join('\n'), images, files }
 }

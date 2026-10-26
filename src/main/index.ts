@@ -12,8 +12,9 @@ import {
   shell,
   Tray
 } from 'electron'
-import { existsSync } from 'node:fs'
+import { existsSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
+import { splitDataUrl } from '../shared/attachments'
 import type {
   AddTodoInput,
   AIRequestResult,
@@ -593,13 +594,33 @@ function registerIpc(): void {
         title: scope === 'selected' ? '番茄待办导出' : '番茄待办 · 全部待办'
       })
       const imageNote = written.imageCount > 0 ? `，${written.imageCount} 张图片写入 attachments/` : ''
+      const fileNote = written.attachmentCount > 0 ? `，${written.attachmentCount} 个附件一并导出` : ''
       return {
         ok: true,
-        message: `已导出 ${written.todoCount} 条待办到 ${basename(written.path)}${imageNote}`,
+        message: `已导出 ${written.todoCount} 条待办到 ${basename(written.path)}${imageNote}${fileNote}`,
         path: written.path
       }
     } catch (error) {
       return { ok: false, message: error instanceof Error ? error.message : '导出 Markdown 失败' }
+    }
+  })
+
+  ipcMain.handle('attachment:save', async (event, input: { name: string; dataUrl: string }): Promise<FileActionResult> => {
+    const name = (input?.name ?? '').trim() || 'attachment'
+    const parts = splitDataUrl(input?.dataUrl ?? '')
+    if (!parts || !parts.base64) return { ok: false, message: '附件内容无效，无法保存' }
+    const window = BrowserWindow.fromWebContents(event.sender)
+    const result = await dialog.showSaveDialog(window ?? mainWindow ?? undefined!, {
+      title: '保存附件',
+      defaultPath: join(app.getPath('downloads'), name),
+      filters: [{ name: '全部文件', extensions: ['*'] }]
+    })
+    if (result.canceled || !result.filePath) return { ok: false, message: '已取消保存' }
+    try {
+      writeFileSync(result.filePath, Buffer.from(parts.base64, 'base64'))
+      return { ok: true, message: `已保存到 ${basename(result.filePath)}`, path: result.filePath }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : '保存附件失败' }
     }
   })
 

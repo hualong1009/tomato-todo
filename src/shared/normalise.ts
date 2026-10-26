@@ -5,7 +5,7 @@ import {
   DEFAULT_STICKY_COLOR,
   DEFAULT_STICKY_OPACITY
 } from './defaults'
-import type { AppSettings, AppState, FocusSession, Group, Todo, Urgency } from './types'
+import type { AppSettings, AppState, Attachment, FocusSession, Group, Todo, Urgency } from './types'
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
@@ -13,6 +13,29 @@ function clone<T>(value: T): T {
 
 function isUrgency(value: unknown): value is Urgency {
   return value === 'low' || value === 'medium' || value === 'high' || value === 'urgent'
+}
+
+/** 附件归一化：丢掉结构不完整的条目，避免坏数据破坏渲染。 */
+function normaliseAttachments(raw: unknown): Attachment[] {
+  if (!Array.isArray(raw)) return []
+  const now = new Date().toISOString()
+  return raw
+    .filter(
+      (item): item is Record<string, unknown> =>
+        Boolean(item && typeof item === 'object' && typeof (item as Record<string, unknown>).data === 'string')
+    )
+    .map((item) => {
+      const data = String(item.data)
+      const decodedSize = Math.floor(((data.split(',')[1] ?? '').length * 3) / 4)
+      return {
+        id: String(item.id ?? crypto.randomUUID()),
+        name: String(item.name ?? '未命名附件'),
+        mime: String(item.mime ?? 'application/octet-stream'),
+        size: Number.isFinite(Number(item.size)) ? Number(item.size) : decodedSize,
+        data,
+        createdAt: typeof item.createdAt === 'string' ? item.createdAt : now
+      }
+    })
 }
 
 function normaliseTodo(raw: Record<string, unknown>, fallbackGroupId: string): Todo {
@@ -74,7 +97,8 @@ function normaliseTodo(raw: Record<string, unknown>, fallbackGroupId: string): T
     stickyBounds:
       raw.stickyBounds && typeof raw.stickyBounds === 'object'
         ? (raw.stickyBounds as Todo['stickyBounds'])
-        : undefined
+        : undefined,
+    attachments: normaliseAttachments(raw.attachments)
   }
 }
 

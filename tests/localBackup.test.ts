@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -9,7 +9,7 @@ import {
   writeLocalBackupFile,
   writeMarkdownExport
 } from '../src/main/localBackup'
-import { archiveTodo, createGroup, createTodo } from '../src/shared/operations'
+import { archiveTodo, createGroup, createTodo, updateTodo } from '../src/shared/operations'
 import { parseRemotePayload } from '../src/shared/backup'
 import { makeState } from './helpers'
 
@@ -89,6 +89,30 @@ describe('writeMarkdownExport', () => {
     expect(markdown).toContain('普通任务')
     expect(markdown).not.toContain('归档任务')
   })
+  it('附件随 Markdown 一起落到 attachments 目录', () => {
+    const state = makeState()
+    const todo = createTodo(state, { title: '带附件任务', groupId: 'inbox' })
+    updateTodo(state, todo.id, {
+      attachments: [
+        {
+          id: 'att-1',
+          name: '报告.pdf',
+          mime: 'application/pdf',
+          size: 6,
+          data: 'data:application/pdf;base64,JVBERi0xLjQK',
+          createdAt: '2026-01-01T00:00:00.000Z'
+        }
+      ]
+    })
+    const result = writeMarkdownExport(join(dir, 'with-files.md'), state, null)
+    expect(result.attachmentCount).toBe(1)
+    const markdown = readFileSync(result.path, 'utf8')
+    expect(markdown).toContain('### 附件')
+    expect(markdown).toContain('[报告.pdf](./attachments/')
+    const files = readdirSync(join(dir, 'attachments'))
+    expect(files.some((name) => name.includes('报告.pdf'))).toBe(true)
+  })
+
 })
 
 describe('writeLocalBackupFile / readLocalBackupFile', () => {
@@ -102,7 +126,7 @@ describe('writeLocalBackupFile / readLocalBackupFile', () => {
     expect(payload.todos.some((todo) => todo.title === '备份任务')).toBe(true)
   })
 
-  it('加密备份（TTENC1）往返，且可用 WebDAV 解析逻辑读取', () => {
+  it('加密备份（TTENC2）往返，且可用 WebDAV 解析逻辑读取', () => {
     const state = makeState()
     const group = createGroup(state, '项目组')
     createTodo(state, { title: '加密任务', content: '秘密内容', groupId: group.id })
@@ -110,7 +134,7 @@ describe('writeLocalBackupFile / readLocalBackupFile', () => {
 
     expect(result.encrypted).toBe(true)
     const raw = readFileSync(result.path)
-    expect(raw.subarray(0, 6).toString('utf8')).toBe('TTENC1')
+    expect(raw.subarray(0, 6).toString('utf8')).toBe('TTENC2')
     expect(result.size).toBe(statSync(result.path).size)
 
     const payload = readLocalBackupFile(result.path, 'pw-123')
@@ -156,3 +180,4 @@ describe('backupBeforeImport', () => {
     expect(backupBeforeImport(join(dir, 'missing.json'))).toBeNull()
   })
 })
+

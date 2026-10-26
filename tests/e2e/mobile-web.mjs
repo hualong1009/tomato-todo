@@ -92,6 +92,9 @@ try {
   await page.waitForSelector('[data-testid="detail-panel"]')
   const detail = await page.locator('[data-testid="detail-panel"]').boundingBox()
   check('详情面板全屏显示', Boolean(detail && detail.width >= 380 && detail.height >= 700))
+  check('详情默认是 Markdown 预览', (await page.locator('[data-testid="detail-content-view"]').count()) === 1)
+  await page.click('[data-testid="detail-edit"]')
+  await page.waitForSelector('[data-testid="rich-tool-bold"]')
   check('富文本工具栏存在', (await page.locator('[data-testid="rich-tool-bold"]').count()) === 1)
   await page.fill('[data-testid="detail-content"]', '普通文字')
   await page.locator('[data-testid="detail-content"]').evaluate((element) => {
@@ -104,6 +107,22 @@ try {
   await page.waitForSelector('[data-testid="rich-preview"] strong')
   check('预览渲染加粗', true)
   await page.click('[data-testid="rich-mode-edit"]')
+  // 附件：编辑态可添加，保存后预览态可下载
+  await page.setInputFiles('[data-testid="attachment-input"]', {
+    name: '说明.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('附件内容', 'utf8')
+  })
+  await page.waitForSelector('[data-testid="attachment-item"]')
+  check('编辑态可添加附件', (await page.locator('[data-testid="attachment-item"]').count()) === 1)
+  await page.click('[data-testid="detail-save"]')
+  await page.waitForSelector('[data-testid="detail-content-view"]')
+  check('保存后回到预览', (await page.locator('[data-testid="detail-content"]').count()) === 0)
+  check(
+    '预览态保留附件且可下载',
+    (await page.locator('[data-testid="attachment-download"]').count()) === 1
+  )
+  check('预览态没有删除按钮', (await page.locator('[data-testid="attachment-remove"]').count()) === 0)
   await page.click('[data-testid="detail-close"]')
 
   // 长按/更多菜单在手机端是底部操作面板

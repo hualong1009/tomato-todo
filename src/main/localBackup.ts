@@ -1,5 +1,6 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, extname, join } from 'node:path'
+import { splitDataUrl } from '../shared/attachments'
 import { createRemotePayload, parseRemotePayload, type RemotePayload } from '../shared/backup'
 import { buildExportMarkdown } from '../shared/markdownExport'
 import type { AppState } from '../shared/types'
@@ -11,6 +12,8 @@ export interface MarkdownFileResult {
   path: string
   todoCount: number
   imageCount: number
+  /** 随 Markdown 一起落盘的附件数量 */
+  attachmentCount: number
 }
 
 function decodeImageDataUrl(dataUrl: string): { data: Buffer; extension: string } | null {
@@ -50,7 +53,8 @@ export function writeMarkdownExport(
   writeFileSync(target, built.markdown, 'utf8')
 
   let imageCount = 0
-  if (built.images.length > 0) {
+  let attachmentCount = 0
+  if (built.images.length > 0 || built.files.length > 0) {
     const assetsDir = join(dirname(target), 'attachments')
     mkdirSync(assetsDir, { recursive: true })
     for (const image of built.images) {
@@ -59,13 +63,19 @@ export function writeMarkdownExport(
       writeFileSync(join(assetsDir, image.name), decoded.data)
       imageCount += 1
     }
+    for (const file of built.files) {
+      const decoded = splitDataUrl(file.dataUrl)
+      if (!decoded || !decoded.base64) continue
+      writeFileSync(join(assetsDir, file.name), Buffer.from(decoded.base64, 'base64'))
+      attachmentCount += 1
+    }
   }
 
   const todoCount = todoIds
     ? state.todos.filter((todo) => todoIds.includes(todo.id)).length
     : state.todos.filter((todo) => options.includeArchived !== false || !todo.archivedAt).length
 
-  return { path: target, todoCount, imageCount }
+  return { path: target, todoCount, imageCount, attachmentCount }
 }
 
 export interface LocalBackupFileResult {
