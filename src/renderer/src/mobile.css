@@ -1,109 +1,652 @@
-/* 移动端 / 窄屏布局（Capacitor 安卓壳或手机浏览器） */
+/* ============================================================
+   移动端（Capacitor / 手机浏览器）专用布局
+   桌面端布局完全不受影响，所有样式都挂在 .mobile-app / .sheet 下
+   ============================================================ */
 
-.app-layout.mobile {
-  position: relative;
-}
-
-.app-layout.mobile .sidebar-shell {
-  position: fixed;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 60;
-  width: 82vw;
-  max-width: 300px;
-  transform: translateX(-102%);
-  transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
-  box-shadow: 24px 0 70px rgba(0, 0, 0, 0.42);
-  display: flex;
-}
-
-.app-layout.mobile .sidebar-shell.open {
-  transform: translateX(0);
-}
-
-.app-layout.mobile .sidebar-shell .sidebar {
-  width: 100%;
-  flex-basis: auto;
-}
-
-.nav-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 55;
-  background: rgba(4, 6, 14, 0.55);
-  backdrop-filter: blur(2px);
-  animation: fadeIn 0.2s ease both;
-}
-
-.app-layout.mobile .main-pane {
-  width: 100%;
-  flex: 1;
-}
-
-.app-layout.mobile .main-header {
-  padding: 14px 14px 10px;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.app-layout.mobile .main-header h1 {
-  font-size: 20px;
-}
-
-.app-layout.mobile .header-actions {
-  width: 100%;
-  gap: 8px;
-}
-
-.app-layout.mobile .header-actions .search-box {
-  flex: 1;
-  min-width: 0;
-}
-
-.app-layout.mobile .header-actions .search-box input {
-  min-width: 0;
-}
-
-.app-layout.mobile .main-scroll {
-  padding: 0 12px 24px;
-}
-
-.app-layout.mobile .composer,
-.app-layout.mobile .todo-composer {
-  padding: 12px;
-}
-
-.app-layout.mobile .detail-panel {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  flex-basis: auto;
-  z-index: 70;
-  border-left: none;
-  animation: detailIn 0.22s ease both;
-}
-
-.app-layout.mobile .ai-panel {
-  width: 100vw;
-  max-width: 100vw;
-}
-
-.app-layout.mobile .mobile-menu-btn {
-  flex: 0 0 auto;
-}
-
-/* 手机安全区（刘海屏 / 手势条） */
-.app-root {
+.app-root.mobile-app {
   padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
 }
 
+.mobile-shell {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- 顶部栏 ---------- */
+.mobile-topbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px 4px;
+}
+
+.mobile-title-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink);
+}
+
+.mobile-title-btn:active {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+
+.mobile-title {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  max-width: 62vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mobile-topbar-actions .header-icon-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+}
+
+.mobile-topbar-actions .header-icon-btn.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* ---------- 搜索 ---------- */
+.mobile-search {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 12px 8px;
+  padding: 0 12px;
+  height: 46px;
+  border-radius: 15px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--muted);
+  animation: fadeIn 0.16s ease both;
+}
+
+.mobile-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 15px;
+  outline: none;
+}
+
+.mobile-search input::placeholder {
+  color: var(--muted-2);
+}
+
+/* ---------- 统计条 ---------- */
+.mobile-summary {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.mobile-summary::-webkit-scrollbar {
+  display: none;
+}
+
+.mobile-summary .summary-pill {
+  flex: 0 0 auto;
+  height: 26px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
+/* ---------- 列表区 ---------- */
+.mobile-main {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 0 12px calc(104px + env(safe-area-inset-bottom, 0px));
+}
+
+.mobile-main .composer {
+  display: none;
+}
+
+.mobile-main .list-summary,
+.mobile-main .main-header {
+  display: none;
+}
+
+.mobile-main .todo-item {
+  min-height: 68px;
+  padding: 12px 12px;
+  border-radius: 16px;
+}
+
+.mobile-main .todo-item .todo-title {
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+
+.mobile-main .todo-excerpt {
+  font-size: 12px;
+  -webkit-line-clamp: 2;
+}
+
+.mobile-main .todo-check {
+  width: 26px;
+  height: 26px;
+}
+
+.mobile-main .todo-icon-btn,
+.mobile-main .todo-more {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+}
+
+.mobile-main .todo-group-stack {
+  gap: 8px;
+}
+
+/* ---------- 悬浮新建按钮 ---------- */
+.mobile-fab {
+  position: fixed;
+  right: 18px;
+  bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  z-index: 45;
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: linear-gradient(155deg, var(--accent), #ff8b5c);
+  box-shadow: 0 14px 34px rgba(255, 98, 92, 0.42), 0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.mobile-fab:active {
+  transform: scale(0.94);
+}
+
+/* ---------- 底部标签栏 ---------- */
+.mobile-tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 44;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel-solid) 88%, transparent);
+  backdrop-filter: blur(26px) saturate(160%);
+}
+
+.mobile-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 50px;
+  padding: 5px 0;
+  border: 0;
+  border-radius: 13px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  transition: 0.16s ease;
+}
+
+.mobile-tab:active {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.mobile-tab.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* ---------- 底部面板 ---------- */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(3, 6, 14, 0.6);
+  backdrop-filter: blur(3px);
+  animation: fadeIn 0.16s ease both;
+}
+
+.sheet {
+  width: 100%;
+  max-height: 84vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 24px 24px 0 0;
+  border-top: 1px solid var(--line-strong);
+  background: var(--panel-solid);
+  box-shadow: 0 -22px 60px rgba(0, 0, 0, 0.45);
+  animation: sheetUp 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition: max-height 0.2s ease;
+}
+
+.sheet.tall {
+  max-height: 93vh;
+}
+
+.sheet-grabber {
+  display: block;
+  width: 42px;
+  height: 4px;
+  margin: 9px auto 0;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+
+.sheet-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px 6px 18px;
+}
+
+.sheet-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sheet-heading strong {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.sheet-heading small {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+}
+
+.sheet-footer {
+  flex: 0 0 auto;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--line);
+}
+
+.sheet-composer .composer {
+  display: block;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.sheet-composer .composer-title {
+  font-size: 16px;
+}
+
+.sheet-composer .composer-content {
+  min-height: 96px;
+  font-size: 13.5px;
+}
+
+/* ---------- 长按操作面板 ---------- */
+.action-sheet {
+  max-height: 80vh;
+}
+
+.action-sheet-list {
+  overflow-y: auto;
+  padding: 4px 8px 0;
+}
+
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 15px;
+  text-align: left;
+}
+
+.action-row:active {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+
+.action-row.danger {
+  color: var(--danger);
+}
+
+.action-row:disabled {
+  color: var(--muted-2);
+}
+
+.action-row .action-icon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  color: var(--muted);
+}
+
+.action-row.danger .action-icon {
+  color: var(--danger);
+}
+
+.action-divider {
+  height: 1px;
+  margin: 6px 12px;
+  background: var(--line);
+}
+
+.action-header {
+  padding: 10px 12px 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.action-cancel {
+  margin: 8px 8px calc(10px + env(safe-area-inset-bottom, 0px));
+  min-height: 52px;
+  border: 0;
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+/* ---------- 视图 / 分组面板 ---------- */
+.mobile-views {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mobile-view-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.mobile-view-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 74px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--card);
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  font-weight: 600;
+  position: relative;
+}
+
+.mobile-view-chip strong {
+  position: absolute;
+  right: 11px;
+  top: 9px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.mobile-view-chip.active {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: var(--accent-soft);
+}
+
+.mobile-view-chip.active strong {
+  color: var(--accent);
+}
+
+.mobile-view-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mobile-view-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.mobile-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mobile-group-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  background: var(--card);
+}
+
+.mobile-group-row.active {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: var(--accent-soft);
+}
+
+.mobile-group-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 50px;
+  padding: 0 6px 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  text-align: left;
+}
+
+.mobile-group-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.mobile-group-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-group-count {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.mobile-group-more {
+  width: 40px;
+  height: 40px;
+  margin-right: 4px;
+  border-radius: 12px;
+}
+
+/* ---------- 详情面板：全屏 ---------- */
+.mobile-app .detail-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  width: 100%;
+  flex-basis: auto;
+  border-left: 0;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  animation: detailIn 0.22s ease both;
+}
+
+.mobile-app .detail-scroll {
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
+.mobile-app .detail-header {
+  padding: 12px 12px 8px 16px;
+}
+
+.mobile-app .detail-content-input {
+  min-height: 150px;
+  font-size: 14px;
+}
+
+/* ---------- 设置 / 弹窗：全屏 ---------- */
+.mobile-app .modal-backdrop {
+  padding: 0;
+  align-items: stretch;
+}
+
+.mobile-app .modal-card {
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  max-height: 100%;
+  border-radius: 0;
+  border: 0;
+}
+
+.mobile-app .settings-modal {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+}
+
+.mobile-app .settings-layout {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
+}
+
+.mobile-app .settings-nav {
+  flex-direction: row;
+  gap: 6px;
+  padding: 10px 12px;
+  border-right: 0;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.mobile-app .settings-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.mobile-app .settings-nav button {
+  flex: 0 0 auto;
+  width: auto;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.mobile-app .settings-content {
+  padding: 14px 14px calc(20px + env(safe-area-inset-bottom, 0px));
+}
+
+.mobile-app .settings-section h3 {
+  font-size: 15px;
+}
+
+.mobile-app .field input,
+.mobile-app .field textarea {
+  font-size: 14px;
+  min-height: 44px;
+}
+
+.mobile-app .btn {
+  min-height: 44px;
+}
+
+.mobile-app .ai-panel {
+  width: 100vw;
+  max-width: 100vw;
+}
+
+/* ---------- 番茄钟迷你条 ---------- */
 .mobile-pomodoro-pill {
   position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 10px);
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
   right: 12px;
   z-index: 50;
+}
+
+@keyframes sheetUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
 }

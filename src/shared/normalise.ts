@@ -143,6 +143,10 @@ export function normaliseState(raw: unknown): AppState {
     security: {
       ...fallback.settings.security,
       ...(settingsSource.security ?? {})
+    },
+    localBackup: {
+      ...fallback.settings.localBackup,
+      ...(settingsSource.localBackup ?? {})
     }
   }
 
@@ -180,6 +184,9 @@ export function normaliseState(raw: unknown): AppState {
   settings.webdav.lastError =
     typeof settings.webdav.lastError === 'string' ? settings.webdav.lastError : null
   settings.general.closeToTray = settings.general.closeToTray !== false
+  settings.localBackup.password = String(settings.localBackup.password ?? '')
+  settings.localBackup.lastBackupAt =
+    typeof settings.localBackup.lastBackupAt === 'string' ? settings.localBackup.lastBackupAt : null
   settings.security.passwordHash = String(settings.security.passwordHash ?? '')
   settings.security.autoLockMinutes = Math.min(
     240,

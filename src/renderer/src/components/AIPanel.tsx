@@ -7,6 +7,7 @@ import {
   AlertIcon,
   CheckIcon,
   CopyIcon,
+  PencilIcon,
   SettingsIcon,
   SparklesIcon,
   TimerIcon,
@@ -25,6 +26,8 @@ export function AIPanel({ open, state, onClose, onOpenSettings, onToast }: AIPan
   const [range, setRange] = useState<SummaryRange>('week')
   const [results, setResults] = useState<Partial<Record<SummaryRange, AIRequestResult>>>({})
   const [loading, setLoading] = useState<SummaryRange | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
   const context = useMemo(() => buildSummaryContext(state, range), [state, range])
   const result = results[range]
   const configured = Boolean(state.settings.ai.apiKey && state.settings.ai.baseUrl && state.settings.ai.model)
@@ -41,6 +44,7 @@ export function AIPanel({ open, state, onClose, onOpenSettings, onToast }: AIPan
   const generate = async () => {
     if (loading) return
     setLoading(range)
+    setEditing(false)
     try {
       const response = await window.api.summarise(range)
       setResults((previous) => ({ ...previous, [range]: response }))
@@ -50,6 +54,22 @@ export function AIPanel({ open, state, onClose, onOpenSettings, onToast }: AIPan
     } finally {
       setLoading(null)
     }
+  }
+
+  const startEdit = () => {
+    setDraft(result?.content ?? '')
+    setEditing(true)
+  }
+
+  const saveEdit = () => {
+    const current = results[range]
+    if (!current?.ok) return
+    setResults((previous) => ({
+      ...previous,
+      [range]: { ...current, content: draft }
+    }))
+    setEditing(false)
+    onToast('已保存修改', 'success')
   }
 
   if (!open) return null
@@ -81,7 +101,10 @@ export function AIPanel({ open, state, onClose, onOpenSettings, onToast }: AIPan
             <button
               key={item}
               className={item === range ? 'active' : ''}
-              onClick={() => setRange(item)}
+              onClick={() => {
+                setRange(item)
+                setEditing(false)
+              }}
               data-testid={`ai-range-${item}`}
             >
               {RANGE_LABELS[item]}
@@ -140,19 +163,62 @@ export function AIPanel({ open, state, onClose, onOpenSettings, onToast }: AIPan
                 </span>
                 <span>{formatDateTime(result.generatedAt)}</span>
                 <div className="ai-result-tools">
-                  <button
-                    className="tiny-btn"
-                    title="复制"
-                    onClick={() => {
-                      void window.api.copyText(result.content ?? '')
-                      onToast('已复制总结', 'success')
-                    }}
-                  >
-                    <CopyIcon size={15} />
-                  </button>
+                  {editing ? (
+                    <>
+                      <button
+                        className="tiny-btn primary"
+                        title="保存修改"
+                        onClick={saveEdit}
+                        disabled={!draft.trim()}
+                        data-testid="ai-save"
+                      >
+                        <CheckIcon size={15} />
+                      </button>
+                      <button
+                        className="tiny-btn"
+                        title="取消编辑"
+                        onClick={() => setEditing(false)}
+                        data-testid="ai-cancel"
+                      >
+                        <XIcon size={15} />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        className="tiny-btn"
+                        title="复制全文"
+                        onClick={() => {
+                          void window.api.copyText(result.content ?? '')
+                          onToast('已复制总结', 'success')
+                        }}
+                        data-testid="ai-copy"
+                      >
+                        <CopyIcon size={15} />
+                      </button>
+                      <button
+                        className="tiny-btn"
+                        title="编辑内容"
+                        onClick={startEdit}
+                        data-testid="ai-edit"
+                      >
+                        <PencilIcon size={15} />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
-              <Markdown content={result.content} />
+              {editing ? (
+                <textarea
+                  className="ai-edit-area"
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  spellCheck={false}
+                  data-testid="ai-edit-area"
+                />
+              ) : (
+                <Markdown content={result.content} />
+              )}
             </div>
           ) : result && !result.ok ? (
             <div className="ai-error">

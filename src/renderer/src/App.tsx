@@ -19,6 +19,10 @@ import {
   AlertIcon,
   ArchiveIcon,
   CheckIcon,
+  ChevronDownIcon,
+  DownloadIcon,
+  FolderIcon,
+  LayersIcon,
   MenuIcon,
   MoonIcon,
   PinIcon,
@@ -37,6 +41,8 @@ import {
 import { PomodoroMini, PomodoroOverlay, type PomodoroState } from './components/PomodoroOverlay'
 import { SettingsModal } from './components/SettingsModal'
 import { isMobile } from './platform'
+import { BottomSheet } from './components/BottomSheet'
+import { MobileViewSheet } from './components/MobileViewSheet'
 import { Sidebar, type ViewKey } from './components/Sidebar'
 import { TitleBar } from './components/TitleBar'
 import { TodoComposer } from './components/TodoComposer'
@@ -91,7 +97,9 @@ export default function App() {
   const [pomodoro, setPomodoro] = useState<PomodoroState | null>(null)
   const [pomodoroOpen, setPomodoroOpen] = useState(false)
   const [security, setSecurity] = useState<SecurityState | null>(null)
-  const [navOpen, setNavOpen] = useState(false)
+  const [viewSheet, setViewSheet] = useState(false)
+  const [composerSheet, setComposerSheet] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const composerRef = useRef<HTMLInputElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const completingRef = useRef(false)
@@ -441,6 +449,14 @@ export default function App() {
     setContext({ x: event.clientX, y: event.clientY, items })
   }
 
+  const exportTodoMarkdown = useCallback(
+    async (todo: Todo) => {
+      const result = await window.api.exportMarkdown({ scope: 'selected', todoIds: [todo.id] })
+      showToast(result.message, result.ok ? 'success' : 'error')
+    },
+    [showToast]
+  )
+
   const openTodoMenu = (event: React.MouseEvent, todo: Todo) => {
     event.preventDefault()
     event.stopPropagation()
@@ -490,6 +506,12 @@ export default function App() {
           label: '打开详情',
           icon: <SettingsIcon size={15} />,
           onClick: () => setSelectedId(todo.id)
+        },
+        {
+          id: 'export-md',
+          label: '导出为 Markdown',
+          icon: <DownloadIcon size={15} />,
+          onClick: () => void exportTodoMarkdown(todo)
         },
         {
           id: 'archive',
@@ -633,181 +655,336 @@ export default function App() {
     lastSyncAt: state.settings.webdav.lastSyncAt
   }
 
+  const todoListElement = (
+    <TodoList
+      sections={listData.sections}
+      archivedTodos={listData.archived}
+      archivedOnly={view === 'archived'}
+      showGroupHeaders={view === 'all'}
+      emptyText={
+        view === 'archived'
+          ? '还没有归档的待办'
+          : search
+            ? '没有匹配的待办'
+            : view === 'completed'
+              ? '还没有完成的待办'
+              : '这里空空如也'
+      }
+      selectedId={selectedId}
+      now={now}
+      onSelect={setSelectedId}
+      onToggle={toggleTodo}
+      onStart={startTodo}
+      onPin={pinTodo}
+      onPomodoro={startPomodoro}
+      onContext={openTodoMenu}
+      onRestore={restoreTodo}
+      onDeleteForever={requestDeleteForever}
+    />
+  )
+
+  const detailPanelElement = selectedTodo ? (
+    <DetailPanel
+      todo={selectedTodo}
+      state={state}
+      now={now}
+      onClose={() => setSelectedId(null)}
+      onUpdate={updateTodo}
+      onToggle={toggleTodo}
+      onStart={startTodo}
+      onPin={pinTodo}
+      onPomodoro={startPomodoro}
+      onArchive={archiveTodo}
+      onRestore={restoreTodo}
+      onDeleteForever={requestDeleteForever}
+    />
+  ) : null
+
   return (
-    <div className="app-root">
+    <div className={`app-root ${isMobile ? 'mobile-app' : ''}`}>
       <div className="aurora aurora-one" />
       <div className="aurora aurora-two" />
       <div className="noise" />
-      {!isMobile && (
-        <TitleBar
-          maximized={maximized}
-          syncState={syncState}
-          miniTimer={
-            pomodoro && !pomodoroOpen ? (
-              <PomodoroMini session={pomodoro} todo={pomodoroTodo} onOpen={() => setPomodoroOpen(true)} />
-            ) : undefined
-          }
-          onMinimize={() => void window.api.windowMinimize()}
-          onToggleMaximize={() => void window.api.windowToggleMaximize().then(setMaximized)}
-          onClose={() => void window.api.windowClose()}
-        />
+      {isMobile ? (
+        <div className="mobile-shell">
+          <header className="mobile-topbar">
+            <button
+              className="mobile-title-btn"
+              onClick={() => setViewSheet(true)}
+              data-testid="mobile-view-trigger"
+            >
+              <span className="mobile-title">{viewTitle}</span>
+              <ChevronDownIcon size={15} />
+            </button>
+            <div className="mobile-topbar-actions">
+              <button
+                className={`header-icon-btn ${searchOpen ? 'active' : ''}`}
+                onClick={() => {
+                  setSearchOpen((value) => !value)
+                  window.setTimeout(() => searchRef.current?.focus(), 30)
+                }}
+                title="搜索"
+                data-testid="mobile-search-toggle"
+              >
+                {searchOpen ? <XIcon size={17} /> : <SearchIcon size={17} />}
+              </button>
+              <button
+                className="header-icon-btn"
+                onClick={() => setAiOpen(true)}
+                title="AI 回顾"
+                data-testid="mobile-ai"
+              >
+                <SparklesIcon size={18} />
+              </button>
+            </div>
+          </header>
+
+          {searchOpen && (
+            <div className="mobile-search">
+              <SearchIcon size={16} />
+              <input
+                ref={searchRef}
+                placeholder="搜索标题或内容…"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                data-testid="search-input"
+              />
+              {search && (
+                <button className="search-clear" onClick={() => setSearch('')} aria-label="清空搜索">
+                  <XIcon size={13} />
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="mobile-summary">
+            <span className="summary-pill">
+              <strong>{listData.activeCount}</strong>
+              {view === 'archived' ? ' 条归档' : ' 条待办'}
+            </span>
+            <span className="summary-pill blue">
+              <PlayIcon size={11} />
+              进行中 {inProgressCount}
+            </span>
+            <span className="summary-pill red">
+              <AlertIcon size={12} />
+              未完成 {overdueCount}
+            </span>
+          </div>
+
+          <main className="mobile-main">{todoListElement}</main>
+
+          {view !== 'archived' && (
+            <button
+              className="mobile-fab"
+              onClick={() => setComposerSheet(true)}
+              aria-label="新建待办"
+              data-testid="mobile-fab"
+            >
+              <PlusIcon size={24} />
+            </button>
+          )}
+
+          <nav className="mobile-tabbar" data-testid="mobile-tabbar">
+            <button
+              className={`mobile-tab ${!view.startsWith('group:') ? 'active' : ''}`}
+              onClick={() => setView('all')}
+              data-testid="mobile-tab-todos"
+            >
+              <LayersIcon size={19} />
+              <span>待办</span>
+            </button>
+            <button
+              className={`mobile-tab ${view.startsWith('group:') ? 'active' : ''}`}
+              onClick={() => setViewSheet(true)}
+              data-testid="mobile-tab-groups"
+            >
+              <FolderIcon size={19} />
+              <span>分组</span>
+            </button>
+            <button className="mobile-tab" onClick={() => setAiOpen(true)} data-testid="mobile-tab-ai">
+              <SparklesIcon size={19} />
+              <span>回顾</span>
+            </button>
+            <button
+              className="mobile-tab"
+              onClick={() => setSettingsOpen(true)}
+              data-testid="mobile-tab-settings"
+            >
+              <SettingsIcon size={19} />
+              <span>我的</span>
+            </button>
+          </nav>
+
+          {detailPanelElement}
+        </div>
+      ) : (
+        <>
+          <TitleBar
+            maximized={maximized}
+            syncState={syncState}
+            miniTimer={
+              pomodoro && !pomodoroOpen ? (
+                <PomodoroMini session={pomodoro} todo={pomodoroTodo} onOpen={() => setPomodoroOpen(true)} />
+              ) : undefined
+            }
+            onMinimize={() => void window.api.windowMinimize()}
+            onToggleMaximize={() => void window.api.windowToggleMaximize().then(setMaximized)}
+            onClose={() => void window.api.windowClose()}
+          />
+          <div className="app-layout">
+            <Sidebar
+              state={state}
+              view={view}
+              onView={setView}
+              onAddGroup={() => setGroupDialog({ mode: 'add' })}
+              onGroupMenu={openGroupMenu}
+              onOpenAI={() => setAiOpen(true)}
+              onOpenSettings={() => setSettingsOpen(true)}
+            />
+            <main className="main-pane">
+              <header className="main-header">
+                <div className="view-heading">
+                  <span className="view-eyebrow">
+                    {view === 'archived' ? 'ARCHIVE' : view.startsWith('group:') ? 'GROUP' : 'WORKSPACE'}
+                  </span>
+                  <h1>{viewTitle}</h1>
+                  <p>{viewSubtitle}</p>
+                </div>
+                <div className="header-actions">
+                  <div className="search-box">
+                    <SearchIcon size={16} />
+                    <input
+                      ref={searchRef}
+                      placeholder="搜索标题或内容…  Ctrl+F"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      data-testid="search-input"
+                    />
+                    {search && (
+                      <button className="search-clear" onClick={() => setSearch('')} aria-label="清空搜索">
+                        <XIcon size={13} />
+                      </button>
+                    )}
+                  </div>
+                  <button className="header-icon-btn ai" onClick={() => setAiOpen(true)} title="AI 回顾" data-testid="header-ai">
+                    <SparklesIcon size={18} />
+                  </button>
+                  <button
+                    className="header-icon-btn"
+                    onClick={() =>
+                      void quickUpdateSettings({
+                        general: {
+                          ...state.settings.general,
+                          theme: state.settings.general.theme === 'dark' ? 'light' : 'dark'
+                        }
+                      })
+                    }
+                    title="切换主题"
+                    data-testid="theme-toggle"
+                  >
+                    {state.settings.general.theme === 'dark' ? <MoonIcon size={17} /> : <SunIcon size={17} />}
+                  </button>
+                  <button className="header-icon-btn" onClick={() => setSettingsOpen(true)} title="设置" data-testid="header-settings">
+                    <SettingsIcon size={18} />
+                  </button>
+                </div>
+              </header>
+
+              <div className="main-scroll">
+                <div className="list-summary">
+                  <div className="summary-pills">
+                    <span className="summary-pill">
+                      <strong>{listData.activeCount}</strong>
+                      {view === 'archived' ? ' 条归档' : ' 条待办'}
+                    </span>
+                    <span className="summary-pill blue">
+                      <PlayIcon size={11} />
+                      进行中 {inProgressCount}
+                    </span>
+                    <span className="summary-pill red">
+                      <AlertIcon size={12} />
+                      未完成 {overdueCount}
+                    </span>
+                    {state.settings.webdav.enabled && (
+                      <span className={`summary-pill ${state.settings.webdav.lastStatus === 'error' ? 'red' : 'green'}`}>
+                        <TimerIcon size={11} />
+                        {state.settings.webdav.lastStatus === 'success' ? 'WebDAV 已同步' : 'WebDAV 待同步'}
+                      </span>
+                    )}
+                  </div>
+                  <span className="summary-hint">
+                    {search ? `搜索「${search}」` : `${state.groups.length} 个分组 · 归档不计入 AI`}
+                  </span>
+                </div>
+
+                {view !== 'archived' && (
+                  <TodoComposer ref={composerRef} groups={state.groups} defaultGroupId={defaultGroupId} onAdd={addTodo} />
+                )}
+
+                {todoListElement}
+              </div>
+            </main>
+
+            {detailPanelElement}
+          </div>
+        </>
       )}
+
       {isMobile && pomodoro && !pomodoroOpen && (
         <div className="mobile-pomodoro-pill">
           <PomodoroMini session={pomodoro} todo={pomodoroTodo} onOpen={() => setPomodoroOpen(true)} />
         </div>
       )}
-      <div className={`app-layout ${isMobile ? 'mobile' : ''}`}>
-        {isMobile && navOpen && <div className="nav-backdrop" onClick={() => setNavOpen(false)} />}
-        <div className={`sidebar-shell ${navOpen ? 'open' : ''}`}>
-          <Sidebar
-            state={state}
-            view={view}
-            onView={(next) => {
-              setView(next)
-              setNavOpen(false)
-            }}
-            onAddGroup={() => setGroupDialog({ mode: 'add' })}
-            onGroupMenu={openGroupMenu}
-            onOpenAI={() => setAiOpen(true)}
-            onOpenSettings={() => setSettingsOpen(true)}
-          />
-        </div>
-        <main className="main-pane">
-          <header className="main-header">
-            <div className="view-heading">
-              <span className="view-eyebrow">
-                {view === 'archived' ? 'ARCHIVE' : view.startsWith('group:') ? 'GROUP' : 'WORKSPACE'}
-              </span>
-              <h1>{viewTitle}</h1>
-              <p>{viewSubtitle}</p>
-            </div>
-            <div className="header-actions">
-              {isMobile && (
-                <button
-                  className="header-icon-btn mobile-menu-btn"
-                  onClick={() => setNavOpen((value) => !value)}
-                  title="分组与视图"
-                  data-testid="mobile-menu"
-                >
-                  <MenuIcon size={18} />
-                </button>
-              )}
-              <div className="search-box">
-                <SearchIcon size={16} />
-                <input
-                  ref={searchRef}
-                  placeholder="搜索标题或内容…  Ctrl+F"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  data-testid="search-input"
-                />
-                {search && (
-                  <button className="search-clear" onClick={() => setSearch('')} aria-label="清空搜索">
-                    <XIcon size={13} />
-                  </button>
-                )}
-              </div>
-              <button className="header-icon-btn ai" onClick={() => setAiOpen(true)} title="AI 回顾" data-testid="header-ai">
-                <SparklesIcon size={18} />
-              </button>
-              <button
-                className="header-icon-btn"
-                onClick={() =>
-                  void quickUpdateSettings({
-                    general: {
-                      ...state.settings.general,
-                      theme: state.settings.general.theme === 'dark' ? 'light' : 'dark'
-                    }
-                  })
-                }
-                title="切换主题"
-                data-testid="theme-toggle"
-              >
-                {state.settings.general.theme === 'dark' ? <MoonIcon size={17} /> : <SunIcon size={17} />}
-              </button>
-              <button className="header-icon-btn" onClick={() => setSettingsOpen(true)} title="设置" data-testid="header-settings">
-                <SettingsIcon size={18} />
-              </button>
-            </div>
-          </header>
 
-          <div className="main-scroll">
-            <div className="list-summary">
-              <div className="summary-pills">
-                <span className="summary-pill">
-                  <strong>{listData.activeCount}</strong>
-                  {view === 'archived' ? ' 条归档' : ' 条待办'}
-                </span>
-                <span className="summary-pill blue">
-                  <PlayIcon size={11} />
-                  进行中 {inProgressCount}
-                </span>
-                <span className="summary-pill red">
-                  <AlertIcon size={12} />
-                  未完成 {overdueCount}
-                </span>
-                {state.settings.webdav.enabled && (
-                  <span className={`summary-pill ${state.settings.webdav.lastStatus === 'error' ? 'red' : 'green'}`}>
-                    <TimerIcon size={11} />
-                    {state.settings.webdav.lastStatus === 'success' ? 'WebDAV 已同步' : 'WebDAV 待同步'}
-                  </span>
-                )}
-              </div>
-              <span className="summary-hint">
-                {search ? `搜索「${search}」` : `${state.groups.length} 个分组 · 归档不计入 AI`}
-              </span>
-            </div>
-
-            {view !== 'archived' && (
-              <TodoComposer ref={composerRef} groups={state.groups} defaultGroupId={defaultGroupId} onAdd={addTodo} />
-            )}
-
-            <TodoList
-              sections={listData.sections}
-              archivedTodos={listData.archived}
-              archivedOnly={view === 'archived'}
-              showGroupHeaders={view === 'all'}
-              emptyText={
-                view === 'archived'
-                  ? '还没有归档的待办'
-                  : search
-                    ? '没有匹配的待办'
-                    : view === 'completed'
-                      ? '还没有完成的待办'
-                      : '这里空空如也'
-              }
-              selectedId={selectedId}
-              now={now}
-              onSelect={setSelectedId}
-              onToggle={toggleTodo}
-              onStart={startTodo}
-              onPin={pinTodo}
-              onPomodoro={startPomodoro}
-              onContext={openTodoMenu}
-              onRestore={restoreTodo}
-              onDeleteForever={requestDeleteForever}
+      {isMobile && (
+        <>
+          <BottomSheet
+            open={viewSheet}
+            title="视图与分组"
+            subtitle="切换状态视图或按分组筛选"
+            onClose={() => setViewSheet(false)}
+          >
+            <MobileViewSheet
+              state={state}
+              view={view}
+              onView={(next) => {
+                setView(next)
+                setViewSheet(false)
+              }}
+              onAddGroup={() => {
+                setViewSheet(false)
+                setGroupDialog({ mode: 'add' })
+              }}
+              onGroupMenu={(event, groupId) => {
+                setViewSheet(false)
+                openGroupMenu(event, groupId)
+              }}
             />
-          </div>
-        </main>
+          </BottomSheet>
 
-        {selectedTodo && (
-          <DetailPanel
-            todo={selectedTodo}
-            state={state}
-            now={now}
-            onClose={() => setSelectedId(null)}
-            onUpdate={updateTodo}
-            onToggle={toggleTodo}
-            onStart={startTodo}
-            onPin={pinTodo}
-            onPomodoro={startPomodoro}
-            onArchive={archiveTodo}
-            onRestore={restoreTodo}
-            onDeleteForever={requestDeleteForever}
-          />
-        )}
-      </div>
+          <BottomSheet
+            open={composerSheet}
+            title="新建待办"
+            subtitle="填好标题回车即可添加"
+            tall
+            onClose={() => setComposerSheet(false)}
+          >
+            <div className="sheet-composer">
+              <TodoComposer
+                ref={composerRef}
+                groups={state.groups}
+                defaultGroupId={defaultGroupId}
+                onAdd={async (input) => {
+                  const ok = await addTodo(input)
+                  if (ok) setComposerSheet(false)
+                  return ok
+                }}
+              />
+            </div>
+          </BottomSheet>
+        </>
+      )}
 
       <AIPanel
         open={aiOpen}

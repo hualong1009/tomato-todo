@@ -3,6 +3,7 @@ import type { TomatoAPI } from '../shared/api'
 import type {
   AppEvent,
   AppState,
+  MarkdownExportInput,
   SummaryRange,
   UpdateTodoPatch,
   WebDAVSettings
@@ -52,6 +53,10 @@ const api: TomatoAPI = {
   testWebDAV: (settings: WebDAVSettings) => ipcRenderer.invoke('webdav:test', settings),
   uploadWebDAV: () => ipcRenderer.invoke('webdav:upload'),
   restoreWebDAV: () => ipcRenderer.invoke('webdav:restore'),
+
+  exportMarkdown: (input: MarkdownExportInput) => ipcRenderer.invoke('export:markdown', input),
+  exportLocalBackup: (options?: { path?: string }) => ipcRenderer.invoke('backup:export', options),
+  importLocalBackup: (options?: { path?: string }) => ipcRenderer.invoke('backup:import', options),
 
   getMcpInfo: () => ipcRenderer.invoke('mcp:info'),
 

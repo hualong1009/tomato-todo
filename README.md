@@ -4,6 +4,16 @@ Windows 桌面待办应用：分组、状态视图、桌面便签、番茄专注
 
 同一个 React 渲染层也可以打包成 **安卓 App**（Capacitor），详见下方「安卓版」章节。
 
+## 界面预览
+
+| 桌面端主界面 | 桌面端详情（Markdown / 图片） |
+| --- | --- |
+| ![桌面端主界面](docs/images/desktop-home.png) | ![桌面端详情](docs/images/desktop-detail.png) |
+
+| 手机端（Capacitor） | AI 回顾 |
+| --- | --- |
+| ![手机端主界面](docs/images/mobile-home.png) | ![AI 回顾](docs/images/mobile-ai-review.png) |
+
 ## 开发与构建
 
 ```bash
@@ -33,7 +43,7 @@ npm run build:web  # 构建移动端 Web 资源到 dist-mobile/
 - 关闭即最小化到系统托盘：默认关闭按钮隐藏到托盘，按全局快捷键或点击托盘图标可再次唤起（可在设置中关闭该行为）。
 - WebDAV 备份：支持可用性测试、自动 / 手动上传、从远端恢复。远端文件不包含 AI Key 和 WebDAV 密码；可设置加密密码，上传前用 AES-256-GCM 加密、恢复时自动解密。
 - 应用重置：一键清空全部待办、分组与设置；设置了管理员密码时需输入密码才能重置。远端 WebDAV 备份不会被删除。
-- MCP：外部 Agent 可通过 stdio 搜索、新增、修改、开始、完成、归档待办和记录专注。
+- MCP：外部 Agent 可通过 stdio 搜索、新增、修改、开始、完成、归档待办、记录专注和生成 AI 回顾（`summarise_todos`，使用应用内配置的 AI 接口）。
 - 全局快捷键默认 `Ctrl+Shift+Space`，可在设置中重新录制。
 
 ## 数据与 MCP

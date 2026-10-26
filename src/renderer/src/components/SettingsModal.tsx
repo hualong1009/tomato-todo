@@ -17,7 +17,10 @@ import {
   CloudIcon,
   CloudOffIcon,
   CopyIcon,
+  DownloadIcon,
   ExternalIcon,
+  FileTextIcon,
+  UploadIcon,
   EyeIcon,
   EyeOffIcon,
   LockIcon,
@@ -28,7 +31,7 @@ import {
   TrashIcon
 } from './Icons'
 
-type Tab = 'ai' | 'prompt' | 'pomodoro' | 'general' | 'webdav' | 'security' | 'mcp' | 'about'
+type Tab = 'ai' | 'prompt' | 'pomodoro' | 'general' | 'webdav' | 'localbackup' | 'security' | 'mcp' | 'about'
 
 interface SettingsModalProps {
   open: boolean
@@ -44,6 +47,7 @@ const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: 'pomodoro', label: '番茄钟', icon: <TimerIcon size={16} /> },
   { key: 'general', label: '通用 / 快捷键', icon: <SettingsIcon size={16} /> },
   { key: 'webdav', label: 'WebDAV 备份', icon: <CloudIcon size={16} /> },
+  { key: 'localbackup', label: '本地备份 / 导出', icon: <CloudCheckIcon size={16} /> },
   { key: 'security', label: '安全 / 重置', icon: <LockIcon size={16} /> },
   { key: 'mcp', label: 'MCP 接入', icon: <ExternalIcon size={16} /> },
   { key: 'about', label: '关于', icon: <TomatoIcon size={16} /> }
@@ -90,6 +94,7 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast }: Sett
   const [webdavResult, setWebdavResult] = useState<{ ok: boolean; message: string } | null>(null)
   const [confirmRestore, setConfirmRestore] = useState(false)
   const [mcpInfo, setMcpInfo] = useState<McpInfo | null>(null)
+  const [fileBusy, setFileBusy] = useState<'export-md' | 'export-backup' | 'import' | null>(null)
   const [passwordDraft, setPasswordDraft] = useState({ current: '', next: '', confirm: '' })
   const [passwordBusy, setPasswordBusy] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
@@ -145,6 +150,49 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast }: Sett
   const updateWebdav = (patch: Partial<WebDAVSettings>) => {
     setDraft((previous) => ({ ...previous, webdav: { ...previous.webdav, ...patch } }))
     setWebdavResult(null)
+  }
+
+  const runMarkdownExport = async (includeArchived: boolean, key: 'export-md') => {
+    setFileBusy(key)
+    try {
+      const result = await window.api.exportMarkdown({ scope: 'all', includeArchived })
+      onToast(result.message, result.ok ? 'success' : 'error')
+    } catch (error) {
+      onToast(cleanError(error), 'error')
+    } finally {
+      setFileBusy(null)
+    }
+  }
+
+  const runExportBackup = async () => {
+    setFileBusy('export-backup')
+    try {
+      // 先把草稿里的密码保存下来，主进程导出时读的是已保存设置
+      if (!(await save())) return
+      const result = await window.api.exportLocalBackup()
+      onToast(result.message, result.ok ? 'success' : 'error')
+      if (result.ok) {
+        const state = await window.api.getState()
+        setDraft(state.settings)
+      }
+    } catch (error) {
+      onToast(cleanError(error), 'error')
+    } finally {
+      setFileBusy(null)
+    }
+  }
+
+  const runImportBackup = async () => {
+    setFileBusy('import')
+    try {
+      if (!(await save())) return
+      const result = await window.api.importLocalBackup()
+      onToast(result.message, result.ok ? 'success' : 'error')
+    } catch (error) {
+      onToast(cleanError(error), 'error')
+    } finally {
+      setFileBusy(null)
+    }
   }
 
   const save = async (): Promise<boolean> => {
@@ -756,6 +804,113 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast }: Sett
                 <p className="settings-note">
                   恢复会用远端待办和分组覆盖本地列表，但保留本机的 AI、快捷键与 WebDAV 设置。
                 </p>
+              </section>
+            )}
+
+
+            {tab === 'localbackup' && (
+              <section className="settings-section">
+                <h3>导出与本地加密备份</h3>
+                <p className="settings-desc">
+                  把待办导出为 Markdown（可直接分享或归档），或者导出一份用密码加密的本地备份文件，随时可以导入还原。
+                </p>
+
+                <div className="backup-card">
+                  <div className="backup-card-head">
+                    <FileTextIcon size={18} />
+                    <div>
+                      <strong>导出为 Markdown</strong>
+                      <small>按分组整理，正文里的图片会写入同名 attachments 目录</small>
+                    </div>
+                  </div>
+                  <div className="backup-actions">
+                    <button
+                      className="btn primary"
+                      disabled={fileBusy !== null}
+                      onClick={() => void runMarkdownExport(true, 'export-md')}
+                      data-testid="setting-export-md-all"
+                    >
+                      <DownloadIcon size={15} />
+                      导出全部待办
+                    </button>
+                    <button
+                      className="btn ghost"
+                      disabled={fileBusy !== null}
+                      onClick={() => void runMarkdownExport(false, 'export-md')}
+                      data-testid="setting-export-md-active"
+                    >
+                      只导出未归档
+                    </button>
+                  </div>
+                </div>
+
+                <div className="backup-card">
+                  <div className="backup-card-head">
+                    <CloudCheckIcon size={18} />
+                    <div>
+                      <strong>本地加密备份</strong>
+                      <small>
+                        使用 AES-256-GCM 加密（与 WebDAV 加密备份同格式），文件后缀 .ttbak，可随时导入还原
+                      </small>
+                    </div>
+                  </div>
+                  {isMobile ? (
+                    <p className="settings-desc">
+                      手机端暂不写入文件：导出的备份 JSON 会复制到剪贴板，导入时从剪贴板读取（不支持解密电脑端加密的备份）。
+                    </p>
+                  ) : (
+                    <label className="field">
+                      <span>备份密码</span>
+                      <div className="input-with-action">
+                        <input
+                          type="password"
+                          value={draft.localBackup.password}
+                          onChange={(event) =>
+                            setDraft((previous) => ({
+                              ...previous,
+                              localBackup: { ...previous.localBackup, password: event.target.value }
+                            }))
+                          }
+                          placeholder="导出/导入本地备份时使用的密码"
+                          data-testid="setting-local-backup-password"
+                        />
+                      </div>
+                      <small>密码只保存在本机，不会写入备份文件；忘记密码将无法解密已导出的备份。</small>
+                    </label>
+                  )}
+                  <div className="backup-actions">
+                    <button
+                      className="btn primary"
+                      disabled={fileBusy !== null}
+                      onClick={() => void runExportBackup()}
+                      data-testid="setting-local-backup-export"
+                    >
+                      <DownloadIcon size={15} />
+                      {isMobile ? '复制备份到剪贴板' : '导出加密备份'}
+                    </button>
+                    <button
+                      className="btn ghost"
+                      disabled={fileBusy !== null}
+                      onClick={() => void runImportBackup()}
+                      data-testid="setting-local-backup-import"
+                    >
+                      <UploadIcon size={15} />
+                      {isMobile ? '从剪贴板导入' : '从备份文件导入'}
+                    </button>
+                  </div>
+                  <div className="backup-meta">
+                    <span>
+                      最近备份：
+                      {draft.localBackup.lastBackupAt
+                        ? new Date(draft.localBackup.lastBackupAt).toLocaleString()
+                        : '尚未备份'}
+                    </span>
+                    <span className="backup-warn">
+                      <AlertIcon size={12} />
+                      导出的 Markdown 与备份都包含你写下的全部内容，请自行保管
+                    </span>
+                  </div>
+                </div>
               </section>
             )}
 

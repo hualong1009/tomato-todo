@@ -5,6 +5,8 @@ import type {
   AppEvent,
   AppSettings,
   AppState,
+  FileActionResult,
+  MarkdownExportInput,
   McpInfo,
   ResetResult,
   SecurityActionResult,
@@ -46,6 +48,10 @@ export interface TomatoAPI {
   testWebDAV(settings: WebDAVSettings): Promise<WebDAVTestResult>
   uploadWebDAV(): Promise<WebDAVSyncResult>
   restoreWebDAV(): Promise<WebDAVSyncResult>
+
+  exportMarkdown(input: MarkdownExportInput): Promise<FileActionResult>
+  exportLocalBackup(options?: { path?: string }): Promise<FileActionResult>
+  importLocalBackup(options?: { path?: string }): Promise<FileActionResult>
 
   getMcpInfo(): Promise<McpInfo>
 

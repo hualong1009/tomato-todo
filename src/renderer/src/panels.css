@@ -1519,3 +1519,243 @@
   line-height: 1.6;
   color: var(--muted);
 }
+
+/* ============ 富文本 / Markdown 编辑器 ============ */
+.rich-editor {
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--ink) 2%, transparent);
+  overflow: hidden;
+}
+
+.rich-editor.disabled {
+  opacity: 0.72;
+}
+
+.rich-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+}
+
+.rich-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+
+.rich-tool {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  transition: 0.14s ease;
+}
+
+.rich-tool:hover:not(:disabled) {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+.rich-tool.danger:hover:not(:disabled) {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
+.rich-tool:disabled {
+  opacity: 0.45;
+}
+
+.rich-sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 3px;
+  background: var(--line);
+}
+
+.rich-modes {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+
+.rich-mode {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.rich-mode.active {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--panel-solid) 92%, transparent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
+.rich-body {
+  display: flex;
+  min-height: 120px;
+}
+
+.rich-body.mode-split {
+  min-height: 180px;
+}
+
+.rich-body.mode-preview .rich-textarea {
+  display: none;
+}
+
+.rich-textarea {
+  flex: 1;
+  min-height: 120px;
+  padding: 10px 12px;
+  border: 0 !important;
+  margin-top: 0 !important;
+  background: transparent;
+  font-family: 'Cascadia Mono', 'Consolas', 'Microsoft YaHei UI', monospace;
+  font-size: 12.5px;
+  line-height: 1.75;
+  resize: vertical;
+}
+
+.rich-body.mode-preview .rich-preview {
+  border-left: 0;
+}
+
+.rich-preview {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border-left: 1px solid var(--line);
+  font-size: 12.5px;
+}
+
+.rich-preview .markdown {
+  font-size: 12.5px;
+}
+
+.rich-preview-empty {
+  margin: 0;
+  color: var(--muted-2);
+  font-size: 12px;
+}
+
+.rich-hint {
+  display: block;
+  padding: 4px 10px 8px;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+.rich-hint.error {
+  color: var(--danger);
+}
+
+/* ============ 本地备份卡片 ============ */
+.backup-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--ink) 2.5%, transparent);
+}
+
+.backup-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--accent);
+}
+
+.backup-card-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.backup-card-head strong {
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.backup-card-head small {
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.backup-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 10.5px;
+  color: var(--muted-2);
+}
+
+.backup-warn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: color-mix(in srgb, var(--yellow) 80%, var(--muted));
+}
+
+/* AI 结果编辑态 */
+.ai-result-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ai-result-tools .tiny-btn.primary {
+  color: #fff;
+  background: var(--green);
+}
+
+.ai-result-tools .tiny-btn.primary:disabled {
+  opacity: 0.5;
+}
+
+.ai-edit-area {
+  display: block;
+  width: 100%;
+  min-height: 320px;
+  margin: 0;
+  padding: 13px;
+  border: 0;
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+  color: var(--ink);
+  font-family: 'Cascadia Mono', 'Consolas', 'Microsoft YaHei UI', monospace;
+  font-size: 12px;
+  line-height: 1.8;
+  resize: vertical;
+  outline: none;
+}

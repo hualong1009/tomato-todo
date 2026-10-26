@@ -227,6 +227,12 @@ export const CopyIcon = (props: IconProps) => (
   </svg>
 )
 
+export const PencilIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="M16.9 3.9a2.2 2.2 0 0 1 3.2 3.2L8.1 19.1l-4.2 1 1-4.2L16.9 3.9Z" />
+  </svg>
+)
+
 export const EyeIcon = (props: IconProps) => (
   <svg {...base(props)}>
     <path d="M2.8 12S6.3 5.8 12 5.8 21.2 12 21.2 12 17.7 18.2 12 18.2 2.8 12 2.8 12Z" />
@@ -306,5 +312,88 @@ export const LockIcon = (props: IconProps) => (
 export const MenuIcon = (props: IconProps) => (
   <svg {...base(props)}>
     <path d="M4 7h16M4 12h16M4 17h16" />
+  </svg>
+)
+
+export const BoldIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="M7 5h6a3.5 3.5 0 0 1 0 7H7zM7 12h6.5a3.5 3.5 0 0 1 0 7H7z" />
+  </svg>
+)
+
+export const ItalicIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="M15 5h-5M14 19H9M14 5l-4 14" />
+  </svg>
+)
+
+export const StrikeIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="M6 12h12" />
+    <path d="M15.5 8.5c0-1.7-1.6-3-3.6-3s-3.4 1-3.4 2.6c0 1.3 1 2.1 2.6 2.9M8.4 15.6c0 1.8 1.7 3 3.7 3s3.5-1.1 3.5-2.8" />
+  </svg>
+)
+
+export const HeadingIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="M6 5v14M14 5v14M6 12h8" />
+  </svg>
+)
+
+export const ListIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="M9 6h11M9 12h11M9 18h11" />
+    <circle cx="4.6" cy="6" r="1.1" fill="currentColor" stroke="none" />
+    <circle cx="4.6" cy="12" r="1.1" fill="currentColor" stroke="none" />
+    <circle cx="4.6" cy="18" r="1.1" fill="currentColor" stroke="none" />
+  </svg>
+)
+
+export const QuoteIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="M9 7H6a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h2v2a2 2 0 0 1-2 2" />
+    <path d="M19 7h-3a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h2v2a2 2 0 0 1-2 2" />
+  </svg>
+)
+
+export const CodeIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="M9 8l-4 4 4 4M15 8l4 4-4 4" />
+  </svg>
+)
+
+export const ImageIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <rect x="3.5" y="5" width="17" height="14" rx="2.5" />
+    <circle cx="9" cy="10" r="1.6" />
+    <path d="M4.5 17.5l4.6-4.4 3.2 3 2.6-2.3 4.6 4" />
+  </svg>
+)
+
+export const LinkIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="M10.5 13.5a3.5 3.5 0 0 0 5 0l3-3a3.54 3.54 0 0 0-5-5l-1.4 1.4" />
+    <path d="M13.5 10.5a3.5 3.5 0 0 0-5 0l-3 3a3.54 3.54 0 0 0 5 5l1.4-1.4" />
+  </svg>
+)
+
+export const DownloadIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="M12 4v10m0 0l-4-4m4 4l4-4" />
+    <path d="M5 17.5V19a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19v-1.5" />
+  </svg>
+)
+
+export const UploadIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="M12 20V10m0 0l-4 4m4-4l4 4" />
+    <path d="M5 6.5V5a1.5 1.5 0 0 1 1.5-1.5h11A1.5 1.5 0 0 1 19 5v1.5" />
+  </svg>
+)
+
+export const FileTextIcon = (props: IconProps) => (
+  <svg {...base(props)}>
+    <path d="M14 3.5H7.5A1.5 1.5 0 0 0 6 5v14a1.5 1.5 0 0 0 1.5 1.5h9A1.5 1.5 0 0 0 18 19V7.5z" />
+    <path d="M14 3.5V7.5H18M9 12h6M9 16h4" />
   </svg>
 )

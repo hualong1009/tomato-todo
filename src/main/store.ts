@@ -3,6 +3,7 @@ import { basename, dirname } from 'node:path'
 import type {
   AppSettings,
   AppState,
+  LocalBackupSettings,
   SettingsUpdateResult,
   WebDAVSettings,
   WebDAVSyncResult
@@ -12,8 +13,9 @@ import { downloadFromWebDAV, uploadToWebDAV } from './webdav'
 
 type Listener = (state: AppState) => void
 
-export type SettingsPatch = Partial<Omit<AppSettings, 'webdav'>> & {
+export type SettingsPatch = Partial<Omit<AppSettings, 'webdav' | 'localBackup'>> & {
   webdav?: Partial<WebDAVSettings>
+  localBackup?: Partial<LocalBackupSettings>
 }
 
 export class AppStore {
@@ -70,7 +72,8 @@ export class AppStore {
         pomodoro: { ...this.state.settings.pomodoro, ...(patch.pomodoro ?? {}) },
         general: { ...this.state.settings.general, ...(patch.general ?? {}) },
         webdav: { ...this.state.settings.webdav, ...(patch.webdav ?? {}) },
-        security: { ...this.state.settings.security, ...(patch.security ?? {}) }
+        security: { ...this.state.settings.security, ...(patch.security ?? {}) },
+        localBackup: { ...this.state.settings.localBackup, ...(patch.localBackup ?? {}) }
       }
     })
     this.state.settings = merged.settings
@@ -87,8 +90,8 @@ export class AppStore {
     this.onStateChanged?.(this.state)
   }
 
-  replaceTodosFromRemote(raw: unknown): { ok: boolean; message: string } {
-    if (!raw || typeof raw !== 'object') return { ok: false, message: '远端数据格式不正确' }
+  replaceTodosFromRemote(raw: unknown, source = 'WebDAV'): { ok: boolean; message: string } {
+    if (!raw || typeof raw !== 'object') return { ok: false, message: `${source}数据格式不正确` }
     const remote = normaliseState({
       groups: (raw as { groups?: unknown }).groups,
       todos: (raw as { todos?: unknown }).todos,
@@ -111,7 +114,7 @@ export class AppStore {
     this.closePinnedState()
     this.persist()
     this.onStateChanged?.(this.state)
-    return { ok: true, message: '已从 WebDAV 恢复待办数据' }
+    return { ok: true, message: `已从${source}恢复待办数据` }
   }
 
   private closePinnedState(): void {

@@ -63,10 +63,25 @@ describe('MCP stdio 兼容服务', () => {
       'list_groups',
       'add_group',
       'update_group',
-      'get_overview'
+      'get_overview',
+      'summarise_todos'
     ]) {
       expect(names).toContain(expected)
     }
+  })
+
+  it('summarise_todos：未配置 AI 接口时报错', async () => {
+    const result = await call('summarise_todos', { range: 'week' })
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain('尚未配置 AI 接口')
+  })
+
+  it('summarise_todos：非法 range 参数被拒绝', async () => {
+    const response = await client.callTool({
+      name: 'summarise_todos',
+      arguments: { range: 'yesterday' }
+    })
+    expect((response as { isError?: boolean }).isError).toBe(true)
   })
 
   it('新增待办时自动创建分组，并支持搜索与详情', async () => {

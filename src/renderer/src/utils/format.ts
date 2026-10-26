@@ -150,3 +150,22 @@ export function acceleratorFromEvent(event: AcceleratorEvent): string | null {
   if (!name) return null
   return [...parts, name].join('+')
 }
+
+/** 把 Markdown 正文压成一行纯文本摘要，用于列表预览。 */
+export function markdownExcerpt(content: string, limit = 120): string {
+  const plain = content
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '[图片]')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/```[\s\S]*?```/g, '[代码]')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^>\s?/gm, '')
+    .replace(/^[-*+]\s+/gm, '')
+    .replace(/\*\*([^*]*)\*\*/g, '$1')
+    .replace(/\*([^*]*)\*/g, '$1')
+    .replace(/~~([^~]*)~~/g, '$1')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return plain.length > limit ? `${plain.slice(0, limit)}…` : plain
+}

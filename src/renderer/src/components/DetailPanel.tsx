@@ -23,6 +23,7 @@ import {
   XIcon
 } from './Icons'
 import { Dropdown } from './Dropdown'
+import { RichContentEditor } from './RichContentEditor'
 
 interface DetailPanelProps {
   todo: Todo
@@ -142,13 +143,11 @@ export function DetailPanel({
           placeholder="待办标题"
           data-testid="detail-title"
         />
-        <textarea
-          className="detail-content-input"
+        <RichContentEditor
           value={content}
           disabled={archived}
-          onChange={(event) => setContent(event.target.value)}
-          placeholder="写下详细内容、背景、拆分步骤…"
-          data-testid="detail-content"
+          placeholder="写下详细内容、背景、拆分步骤…支持 Markdown 与图片"
+          onChange={setContent}
         />
         <div className="save-state">
           {saveState === 'typing'

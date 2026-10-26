@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { URGENCY_META } from '@shared/defaults'
 import type { Group, Todo } from '@shared/types'
 import { getTodoStatus, isOverdue, STATUS_META } from '@shared/todoUtils'
-import { todoStatusText, formatDateTime, formatDue } from '../utils/format'
+import { todoStatusText, formatDateTime, formatDue, markdownExcerpt } from '../utils/format'
 import {
   AlertIcon,
   CalendarIcon,
@@ -111,7 +111,9 @@ export function TodoItem({
           <h3 className="todo-title">{todo.title}</h3>
           {archived && <span className="chip chip-archive">已归档</span>}
         </div>
-        {todo.content.trim() && <p className="todo-excerpt">{todo.content.replace(/\s+/g, ' ')}</p>}
+        {todo.content.trim() && (
+          <p className="todo-excerpt">{markdownExcerpt(todo.content)}</p>
+        )}
         <div className="todo-chips">
           <span
             className={`chip chip-status status-${status}`}

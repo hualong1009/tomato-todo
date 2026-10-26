@@ -96,6 +96,13 @@ export interface SecuritySettings {
   autoLockMinutes: number
 }
 
+export interface LocalBackupSettings {
+  /** 本地加密备份使用的密码，空字符串表示未设置 */
+  password: string
+  /** 最近一次导出本地备份的时间 */
+  lastBackupAt: string | null
+}
+
 export interface AppSettings {
   ai: AISettings
   promptTemplate: string
@@ -103,6 +110,7 @@ export interface AppSettings {
   general: GeneralSettings
   webdav: WebDAVSettings
   security: SecuritySettings
+  localBackup: LocalBackupSettings
 }
 
 export interface AppState {
@@ -163,6 +171,22 @@ export interface WebDAVSyncResult {
   ok: boolean
   message: string
   at?: string
+}
+
+export interface MarkdownExportInput {
+  /** all：导出全部待办；selected：只导出 todoIds 指定的待办 */
+  scope: 'all' | 'selected'
+  todoIds?: string[]
+  /** 导出时是否包含已归档的待办，默认 true */
+  includeArchived?: boolean
+  /** 指定绝对路径时跳过保存对话框（用于批量/自动化场景） */
+  path?: string
+}
+
+export interface FileActionResult {
+  ok: boolean
+  message: string
+  path?: string
 }
 
 export interface McpInfo {

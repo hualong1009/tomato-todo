@@ -78,6 +78,11 @@ export const DEFAULT_PROMPT_TEMPLATE = `你是一位洞察敏锐、说话直接�
 4. 结合紧急程度与期望完成时间，给出 3 条具体、可执行的下一步建议，必要时说明优先级调整。
 5. 只依据给定数据，不要编造事实；数据不足时直接说明。`
 
+export const DEFAULT_LOCAL_BACKUP = {
+  password: '',
+  lastBackupAt: null
+}
+
 export const DEFAULT_SETTINGS: AppSettings = {
   ai: {
     provider: 'openai',
@@ -110,7 +115,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   security: {
     passwordHash: '',
     autoLockMinutes: 5
-  }
+  },
+  localBackup: DEFAULT_LOCAL_BACKUP
 }
 
 export const DEFAULT_GROUPS: Group[] = [

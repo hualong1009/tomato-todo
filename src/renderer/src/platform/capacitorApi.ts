@@ -25,6 +25,7 @@ import {
   updateGroup,
   updateTodo
 } from '../../../shared/operations'
+import { buildExportMarkdown } from '../../../shared/markdownExport'
 import { buildSummaryContext } from '../../../shared/summary'
 import type {
   AddTodoInput,
@@ -33,6 +34,8 @@ import type {
   AppEvent,
   AppSettings,
   AppState,
+  FileActionResult,
+  MarkdownExportInput,
   McpInfo,
   ResetResult,
   SecurityActionResult,
@@ -118,6 +121,14 @@ function mergeSettings(patch: Partial<AppSettings>): AppSettings {
       security: { ...current.security, ...(patch.security ?? {}) }
     }
   }).settings
+}
+
+async function readClipboardText(): Promise<string> {
+  try {
+    return (await navigator.clipboard.readText()) ?? ''
+  } catch {
+    return ''
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -387,6 +398,61 @@ export function createCapacitorApi(): TomatoAPI {
     testWebDAV,
     uploadWebDAV,
     restoreWebDAV,
+
+    exportMarkdown: async (input: MarkdownExportInput): Promise<FileActionResult> => {
+      await loadState()
+      const scope = input.scope === 'selected' ? 'selected' : 'all'
+      const todoIds = scope === 'selected' ? (input.todoIds ?? []) : null
+      if (scope === 'selected' && (!todoIds || todoIds.length === 0)) {
+        return { ok: false, message: '没有选中要导出的待办' }
+      }
+      const built = buildExportMarkdown(state, todoIds, {
+        includeArchived: input.includeArchived !== false,
+        title: scope === 'selected' ? '番茄待办导出' : '番茄待办 · 全部待办'
+      })
+      const count = todoIds ? todoIds.length : built.markdown.length
+      try {
+        await api.copyText(built.markdown)
+        return {
+          ok: true,
+          message: `已复制 Markdown 到剪贴板（${todoIds ? `${count} 条待办` : '全部待办'}）`
+        }
+      } catch {
+        return { ok: false, message: '复制到剪贴板失败' }
+      }
+    },
+
+    exportLocalBackup: async (): Promise<FileActionResult> => {
+      await loadState()
+      if (!state.settings.localBackup.password.trim()) {
+        return { ok: false, message: '请先在设置中填写本地备份密码，备份会用它加密' }
+      }
+      const payload = createRemotePayload(state)
+      try {
+        await api.copyText(payload)
+        return {
+          ok: true,
+          message: '手机端暂不写文件：备份 JSON 已复制到剪贴板（未加密，请妥善保管）'
+        }
+      } catch {
+        return { ok: false, message: '复制到剪贴板失败' }
+      }
+    },
+
+    importLocalBackup: async (): Promise<FileActionResult> => {
+      await loadState()
+      const text = await readClipboardText()
+      if (!text) return { ok: false, message: '剪贴板里没有备份内容' }
+      if (text.trimStart().startsWith(ENCRYPTED_MAGIC)) {
+        return { ok: false, message: '剪贴板里是加密备份，手机端暂不支持解密，请在电脑端导入' }
+      }
+      const payload = parseRemotePayload(text)
+      if (!payload) return { ok: false, message: '剪贴板内容不是有效的待办数据' }
+      state = normaliseState({ groups: payload.groups, todos: payload.todos, settings: state.settings })
+      emit()
+      await persistNow()
+      return { ok: true, message: `已导入 ${payload.todos.length} 条待办` }
+    },
 
     getMcpInfo: async (): Promise<McpInfo> => ({
       command: '桌面端功能',

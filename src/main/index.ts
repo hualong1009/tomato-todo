@@ -2,6 +2,7 @@ import {
   app,
   BrowserWindow,
   clipboard,
+  dialog,
   globalShortcut,
   ipcMain,
   Menu,
@@ -12,13 +13,15 @@ import {
   Tray
 } from 'electron'
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import type {
   AddTodoInput,
   AIRequestResult,
   AISettings,
   AppEvent,
   AppSettings,
+  FileActionResult,
+  MarkdownExportInput,
   SecurityActionResult,
   SecurityState,
   SummaryRange,
@@ -41,6 +44,13 @@ import {
 } from '../shared/operations'
 import { callAIChat, listAIModels, testAIConnection } from '../shared/aiClient'
 import { appFetch } from './appFetch'
+import {
+  backupBeforeImport,
+  normaliseMarkdownPath,
+  readLocalBackupFile,
+  writeLocalBackupFile,
+  writeMarkdownExport
+} from './localBackup'
 import { hashPassword, verifyPassword } from './security'
 import { AppStore, type SettingsPatch } from './store'
 import { testWebDAV } from './webdav'
@@ -552,6 +562,113 @@ function registerIpc(): void {
     const result = await appStore.restoreFromWebDAV()
     if (result.ok) syncStickyWindows()
     return result
+  })
+
+
+  ipcMain.handle('export:markdown', async (event, input: MarkdownExportInput): Promise<FileActionResult> => {
+    const state = appStore.getState()
+    const scope = input?.scope === 'selected' ? 'selected' : 'all'
+    const todoIds = scope === 'selected' ? (input.todoIds ?? []) : null
+    if (scope === 'selected' && (!todoIds || todoIds.length === 0)) {
+      return { ok: false, message: '没有选中要导出的待办' }
+    }
+    let target = input?.path?.trim() ?? ''
+    if (!target) {
+      const window = BrowserWindow.fromWebContents(event.sender)
+      const stamp = new Date().toISOString().slice(0, 10)
+      const suggested = scope === 'selected'
+        ? `番茄待办-${stamp}.md`
+        : `番茄待办全部-${stamp}.md`
+      const result = await dialog.showSaveDialog(window ?? mainWindow ?? undefined!, {
+        title: '导出为 Markdown',
+        defaultPath: join(app.getPath('documents'), suggested),
+        filters: [{ name: 'Markdown', extensions: ['md'] }]
+      })
+      if (result.canceled || !result.filePath) return { ok: false, message: '已取消导出' }
+      target = result.filePath
+    }
+    try {
+      const written = writeMarkdownExport(target, state, todoIds, {
+        includeArchived: input?.includeArchived !== false,
+        title: scope === 'selected' ? '番茄待办导出' : '番茄待办 · 全部待办'
+      })
+      const imageNote = written.imageCount > 0 ? `，${written.imageCount} 张图片写入 attachments/` : ''
+      return {
+        ok: true,
+        message: `已导出 ${written.todoCount} 条待办到 ${basename(written.path)}${imageNote}`,
+        path: written.path
+      }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : '导出 Markdown 失败' }
+    }
+  })
+
+  ipcMain.handle('backup:export', async (event, options?: { path?: string }): Promise<FileActionResult> => {
+    const state = appStore.getState()
+    const password = state.settings.localBackup.password
+    if (!password.trim()) {
+      return { ok: false, message: '请先在设置中填写本地备份密码，备份会用它加密' }
+    }
+    let target = options?.path?.trim() ?? ''
+    if (!target) {
+      const window = BrowserWindow.fromWebContents(event.sender)
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+      const result = await dialog.showSaveDialog(window ?? mainWindow ?? undefined!, {
+        title: '导出本地加密备份',
+        defaultPath: join(app.getPath('documents'), `番茄待办备份-${stamp}.ttbak`),
+        filters: [{ name: '番茄待办备份', extensions: ['ttbak'] }]
+      })
+      if (result.canceled || !result.filePath) return { ok: false, message: '已取消备份' }
+      target = result.filePath
+    }
+    try {
+      const written = writeLocalBackupFile(target, state, password)
+      const now = new Date().toISOString()
+      appStore.updateSettings({
+        localBackup: { ...state.settings.localBackup, lastBackupAt: now }
+      })
+      return {
+        ok: true,
+        message: `已导出加密备份 ${basename(written.path)}（${Math.round(written.size / 1024)} KB）`,
+        path: written.path
+      }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : '导出本地备份失败' }
+    }
+  })
+
+  ipcMain.handle('backup:import', async (event, options?: { path?: string }): Promise<FileActionResult> => {
+    const state = appStore.getState()
+    let source = options?.path?.trim() ?? ''
+    if (!source) {
+      const window = BrowserWindow.fromWebContents(event.sender)
+      const result = await dialog.showOpenDialog(window ?? mainWindow ?? undefined!, {
+        title: '导入本地备份',
+        properties: ['openFile'],
+        filters: [
+          { name: '番茄待办备份', extensions: ['ttbak', 'json'] },
+          { name: '所有文件', extensions: ['*'] }
+        ]
+      })
+      if (result.canceled || result.filePaths.length === 0) {
+        return { ok: false, message: '已取消导入' }
+      }
+      source = result.filePaths[0]
+    }
+    try {
+      const payload = readLocalBackupFile(source, state.settings.localBackup.password)
+      backupBeforeImport(dataFile())
+      const applied = appStore.replaceTodosFromRemote(payload, '本地备份')
+      if (!applied.ok) return { ok: false, message: applied.message }
+      syncStickyWindows()
+      return {
+        ok: true,
+        message: `已从 ${basename(source)} 导入 ${payload.todos.length} 条待办`,
+        path: source
+      }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : '导入本地备份失败' }
+    }
   })
 
   ipcMain.handle('mcp:info', () => {

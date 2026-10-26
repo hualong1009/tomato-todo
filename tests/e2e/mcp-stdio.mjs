@@ -58,7 +58,7 @@ try {
   notify('notifications/initialized', {})
   const tools = await request(2, 'tools/list', {})
   const names = tools.result.tools.map((tool) => tool.name)
-  for (const required of ['add_todo', 'search_todos', 'complete_todo']) {
+  for (const required of ['add_todo', 'search_todos', 'complete_todo', 'summarise_todos']) {
     if (!names.includes(required)) throw new Error(`缺少工具: ${required}`)
   }
   console.log('tools/list OK:', names.join(', '))
@@ -71,6 +71,16 @@ try {
   const search = await request(4, 'tools/call', { name: 'search_todos', arguments: { query: '管道' } })
   if (!JSON.stringify(search.result).includes('stdio 管道验证')) throw new Error('search 未找到新增待办')
   console.log('add/search OK')
+
+  // 未配置 AI 接口时 summarize_todos 应返回友好错误
+  const summary = await request(5, 'tools/call', {
+    name: 'summarise_todos',
+    arguments: { range: 'week' }
+  })
+  if (!summary.result.isError || !JSON.stringify(summary.result).includes('尚未配置 AI 接口')) {
+    throw new Error('summarise_todos 未返回未配置错误: ' + JSON.stringify(summary.result))
+  }
+  console.log('summarise_todos unconfigured OK')
 
   child.stdin.end()
   await new Promise((res) => child.on('exit', res))

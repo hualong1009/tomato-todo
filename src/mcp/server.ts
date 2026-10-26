@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
+import { callAIChat } from '../shared/aiClient'
 import { URGENCY_META } from '../shared/defaults'
 import {
   archiveTodo,
@@ -13,8 +14,9 @@ import {
   updateGroup,
   updateTodo
 } from '../shared/operations'
-import type { AppState, Group, Todo, Urgency } from '../shared/types'
+import type { AppState, Group, SummaryRange, Todo, Urgency } from '../shared/types'
 import { getTodoStatus, isOverdue, STATUS_META } from '../shared/todoUtils'
+import { buildSummaryContext } from '../shared/summary'
 import { TodoFileStore } from './todoFileStore'
 
 const URGENCY_VALUES = ['low', 'medium', 'high', 'urgent'] as const
@@ -161,7 +163,8 @@ export function createTodoMcpServer(dataFile: string): McpServer {
       instructions:
         'Tomato Todo 桌面待办应用的数据接口。待办支持标题、内容、用户分组、紧急程度、期望完成时间、开始时间、实际完成时间和归档。' +
         '归档等价于删除，归档事项默认不会出现在列表、搜索、统计和 AI 回顾中；需要查看时显式设置 include_archived 或 status=archived。' +
-        '所有时间为 ISO 8601 字符串。调用 update_todo 时传入 completed=true 会写入实际完成时间，传入 started=true 会写入开始时间。'
+        '所有时间为 ISO 8601 字符串。调用 update_todo 时传入 completed=true 会写入实际完成时间，传入 started=true 会写入开始时间。' +
+        'summarise_todos 会使用应用内配置的 AI 接口生成待办回顾。'
     }
   )
 
@@ -571,6 +574,51 @@ export function createTodoMcpServer(dataFile: string): McpServer {
           ),
           groups: state.groups.map((group) => serialiseGroup(group, state)),
           generatedAt: new Date().toISOString()
+        })
+      } catch (error) {
+        return errorResult(error)
+      }
+    }
+  )
+
+  server.registerTool(
+    'summarise_todos',
+    {
+      title: 'AI 总结待办',
+      description:
+        'Generate an AI review of todos for a time range (week, month or year), same as the in-app "AI 回顾" panel. Uses the AI provider configured in app settings; archived todos are excluded. Returns an error if the AI provider is not configured.',
+      inputSchema: {
+        range: z.enum(['week', 'month', 'year']).optional().describe('Summary time range. Default: week.')
+      },
+      annotations: { readOnlyHint: true }
+    },
+    async (args) => {
+      try {
+        const state = store.read()
+        const settings = state.settings.ai
+        if (!settings.baseUrl.trim() || !settings.apiKey.trim() || !settings.model.trim()) {
+          throw new Error('尚未配置 AI 接口：请先在应用的「设置 → AI 接口」中填写 Base URL、API 密钥和模型')
+        }
+        const range: SummaryRange = args.range ?? 'week'
+        const context = buildSummaryContext(state, range)
+        const content = await callAIChat(
+          settings,
+          [
+            {
+              role: 'system',
+              content:
+                '你是个人生产力回顾助手。严格依据用户提供的数据输出中文 Markdown，不编造不存在的事实。'
+            },
+            { role: 'user', content: context.prompt }
+          ],
+          { timeoutMs: 120000 }
+        )
+        return jsonResult({
+          ok: true,
+          range,
+          model: settings.model,
+          generatedAt: new Date().toISOString(),
+          content
         })
       } catch (error) {
         return errorResult(error)
