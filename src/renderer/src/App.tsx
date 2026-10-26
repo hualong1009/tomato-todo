@@ -19,6 +19,7 @@ import {
   AlertIcon,
   ArchiveIcon,
   CheckIcon,
+  MenuIcon,
   MoonIcon,
   PinIcon,
   PlayIcon,
@@ -35,6 +36,7 @@ import {
 } from './components/Icons'
 import { PomodoroMini, PomodoroOverlay, type PomodoroState } from './components/PomodoroOverlay'
 import { SettingsModal } from './components/SettingsModal'
+import { isMobile } from './platform'
 import { Sidebar, type ViewKey } from './components/Sidebar'
 import { TitleBar } from './components/TitleBar'
 import { TodoComposer } from './components/TodoComposer'
@@ -89,6 +91,7 @@ export default function App() {
   const [pomodoro, setPomodoro] = useState<PomodoroState | null>(null)
   const [pomodoroOpen, setPomodoroOpen] = useState(false)
   const [security, setSecurity] = useState<SecurityState | null>(null)
+  const [navOpen, setNavOpen] = useState(false)
   const composerRef = useRef<HTMLInputElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const completingRef = useRef(false)
@@ -635,28 +638,41 @@ export default function App() {
       <div className="aurora aurora-one" />
       <div className="aurora aurora-two" />
       <div className="noise" />
-      <TitleBar
-        maximized={maximized}
-        syncState={syncState}
-        miniTimer={
-          pomodoro && !pomodoroOpen ? (
-            <PomodoroMini session={pomodoro} todo={pomodoroTodo} onOpen={() => setPomodoroOpen(true)} />
-          ) : undefined
-        }
-        onMinimize={() => void window.api.windowMinimize()}
-        onToggleMaximize={() => void window.api.windowToggleMaximize().then(setMaximized)}
-        onClose={() => void window.api.windowClose()}
-      />
-      <div className="app-layout">
-        <Sidebar
-          state={state}
-          view={view}
-          onView={setView}
-          onAddGroup={() => setGroupDialog({ mode: 'add' })}
-          onGroupMenu={openGroupMenu}
-          onOpenAI={() => setAiOpen(true)}
-          onOpenSettings={() => setSettingsOpen(true)}
+      {!isMobile && (
+        <TitleBar
+          maximized={maximized}
+          syncState={syncState}
+          miniTimer={
+            pomodoro && !pomodoroOpen ? (
+              <PomodoroMini session={pomodoro} todo={pomodoroTodo} onOpen={() => setPomodoroOpen(true)} />
+            ) : undefined
+          }
+          onMinimize={() => void window.api.windowMinimize()}
+          onToggleMaximize={() => void window.api.windowToggleMaximize().then(setMaximized)}
+          onClose={() => void window.api.windowClose()}
         />
+      )}
+      {isMobile && pomodoro && !pomodoroOpen && (
+        <div className="mobile-pomodoro-pill">
+          <PomodoroMini session={pomodoro} todo={pomodoroTodo} onOpen={() => setPomodoroOpen(true)} />
+        </div>
+      )}
+      <div className={`app-layout ${isMobile ? 'mobile' : ''}`}>
+        {isMobile && navOpen && <div className="nav-backdrop" onClick={() => setNavOpen(false)} />}
+        <div className={`sidebar-shell ${navOpen ? 'open' : ''}`}>
+          <Sidebar
+            state={state}
+            view={view}
+            onView={(next) => {
+              setView(next)
+              setNavOpen(false)
+            }}
+            onAddGroup={() => setGroupDialog({ mode: 'add' })}
+            onGroupMenu={openGroupMenu}
+            onOpenAI={() => setAiOpen(true)}
+            onOpenSettings={() => setSettingsOpen(true)}
+          />
+        </div>
         <main className="main-pane">
           <header className="main-header">
             <div className="view-heading">
@@ -667,6 +683,16 @@ export default function App() {
               <p>{viewSubtitle}</p>
             </div>
             <div className="header-actions">
+              {isMobile && (
+                <button
+                  className="header-icon-btn mobile-menu-btn"
+                  onClick={() => setNavOpen((value) => !value)}
+                  title="分组与视图"
+                  data-testid="mobile-menu"
+                >
+                  <MenuIcon size={18} />
+                </button>
+              )}
               <div className="search-box">
                 <SearchIcon size={16} />
                 <input

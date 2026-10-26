@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">番茄待办</string>
+    <string name="title_activity_main">番茄待办</string>
+    <string name="package_name">app.tomato.todo</string>
+    <string name="custom_url_scheme">app.tomato.todo</string>
+</resources>

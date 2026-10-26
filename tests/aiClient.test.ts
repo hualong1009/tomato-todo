@@ -5,7 +5,7 @@ import {
   resolveAIEndpoint,
   resolveModelsEndpoint,
   testAIConnection
-} from '../src/main/aiClient'
+} from '../src/shared/aiClient'
 import type { AISettings } from '../src/shared/types'
 
 function settings(overrides: Partial<AISettings> = {}): AISettings {

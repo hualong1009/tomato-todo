@@ -2,6 +2,8 @@
 
 Windows 桌面待办应用：分组、状态视图、桌面便签、番茄专注、AI 回顾、WebDAV 备份与 MCP 接口。
 
+同一个 React 渲染层也可以打包成 **安卓 App**（Capacitor），详见下方「安卓版」章节。
+
 ## 开发与构建
 
 ```bash
@@ -9,6 +11,8 @@ npm install
 npm run dev        # 开发模式
 npm run build      # 类型检查 + 构建
 npm run build:win  # 构建 Windows NSIS 安装包
+npm run dev:web    # 浏览器里预览移动端布局（手机视口）
+npm run build:web  # 构建移动端 Web 资源到 dist-mobile/
 ```
 
 生成物位于 `out/`，安装包位于 `release/`（NSIS 安装器 + `win-unpacked` 免安装目录）。
@@ -56,12 +60,51 @@ MCP 与桌面应用共享同一数据文件；桌面端通过文件监听自动�
 ## 测试
 
 ```bash
-npm test       # 47 个单元 / 集成测试（共享逻辑、持久化、WebDAV、Store、MCP）
-npm run test:e2e  # 构建后启动 Electron 的 Playwright 冒烟测试
+npm test          # 95 个单元 / 集成测试（共享逻辑、持久化、WebDAV、Store、MCP、加密、适配层）
+npm run test:e2e  # 构建后跑桌面端 Electron + 移动端 Web 的 Playwright 测试
 ```
 
-E2E 覆盖新建、完成、详情、番茄钟、右键菜单、归档、设置、AI 面板、主题和搜索。
+E2E 覆盖：桌面端新建/完成/详情/番茄钟/右键菜单/归档/设置/AI/主题/搜索、下拉组件、
+安全锁定与托盘、MCP stdio，以及移动端布局（抽屉侧栏、全屏详情、设置裁剪、本地持久化）。
 
 ## 图标
 
 应用图标基于 Twemoji Tomato（CC-BY 4.0）重新设计，源文件位于 `build/icon.svg`，生成 `icon.png` 与 `icon.ico`。
+
+## 安卓版（Capacitor）
+
+桌面版与安卓版共用同一份 React 渲染层和 `src/shared` 业务逻辑，区别只在数据层：
+桌面用 Electron preload 注入的 `window.api`，安卓用 `src/renderer/src/platform` 里的
+Capacitor 适配层（`@capacitor/preferences` 存数据、`CapacitorHttp` 发网络请求以绕过 WebView 的 CORS）。
+
+```bash
+npm run build:web     # 构建 Web 资源到 dist-mobile/
+npx cap sync android  # 同步到 android/ 工程（会自动执行 build:web）
+npx cap open android  # 用 Android Studio 打开，编译安装
+# 或已连接设备时：
+npm run android:run
+```
+
+首次构建需要安装 **Android Studio + Android SDK（API 34+）与 JDK 21**，并设置 `ANDROID_HOME`。
+测试环境只安装了 JDK 21，没有 Android SDK，因此仓库里不包含 APK 产物。
+
+### 安卓端能力差异
+
+| 功能 | 桌面端 | 安卓端 |
+|---|---|---|
+| 待办 / 分组 / 搜索 / 番茄钟 / 详情 | ✅ | ✅ |
+| AI 回顾（周/月/年） | ✅ | ✅ 走 `CapacitorHttp` |
+| WebDAV 备份 / 恢复 | ✅ 支持加密 | ⚠️ 仅明文 JSON（加密备份会提示不支持） |
+| 本地数据存储 | `%APPDATA%/tomato-todo/*.json` | Preferences（`CapacitorStorage.*`） |
+| 桌面便签、托盘、全局快捷键 | ✅ | — 无（固定在手机上只标记状态） |
+| 管理员密码 / 自动锁定 | ✅ | — 由系统锁屏保护，设置里已隐藏 |
+| MCP 服务 | ✅ | — 仅桌面端 |
+| 关闭到托盘 | ✅ | — 设置里已隐藏 |
+
+移动端界面会自动切换布局：隐藏自绘标题栏、侧栏变成抽屉、详情面板全屏、隐藏桌面专属设置项。
+
+### 安卓图标
+
+```bash
+npm run android:icons  # 从 build/icon.png 生成 mipmap 图标与 splash
+```
