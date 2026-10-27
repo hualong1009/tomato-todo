@@ -43,10 +43,10 @@ interface SettingsModalProps {
 }
 
 const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
-  { key: 'ai', label: 'AI 接口', icon: <SparklesIcon size={16} /> },
-  { key: 'prompt', label: '提示词模板', icon: <SettingsIcon size={16} /> },
-  { key: 'pomodoro', label: '番茄钟', icon: <TimerIcon size={16} /> },
   { key: 'general', label: '通用 / 快捷键', icon: <SettingsIcon size={16} /> },
+  { key: 'pomodoro', label: '番茄钟', icon: <TimerIcon size={16} /> },
+  { key: 'ai', label: 'AI 接口', icon: <SparklesIcon size={16} /> },
+  { key: 'prompt', label: '提示词模板', icon: <FileTextIcon size={16} /> },
   { key: 'webdav', label: 'WebDAV 备份', icon: <CloudIcon size={16} /> },
   { key: 'localbackup', label: '本地备份 / 导出', icon: <CloudCheckIcon size={16} /> },
   { key: 'security', label: '安全 / 重置', icon: <LockIcon size={16} /> },
@@ -87,7 +87,7 @@ const PLACEHOLDERS = [
 ]
 
 export function SettingsModal({ open, settings, onClose, onSave, onToast }: SettingsModalProps) {
-  const [tab, setTab] = useState<Tab>('ai')
+  const [tab, setTab] = useState<Tab>('general')
   const [draft, setDraft] = useState<AppSettings>(settings)
   const [saveBusy, setSaveBusy] = useState(false)
   const [aiTesting, setAiTesting] = useState(false)
