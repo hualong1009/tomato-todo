@@ -11,7 +11,9 @@
 | **Windows** | [Releases](https://github.com/hualong1009/tomato-todo/releases) 页面下载 NSIS 安装包（`tomato-todo-setup-X.Y.Z.exe`） |
 | **Linux** | Releases 页面下载 AppImage（免安装）/ deb / rpm（`tomato-todo-X.Y.Z-x64.*`） |
 | **macOS** | Releases 页面下载 dmg（`tomato-todo-X.Y.Z-x64/arm64.dmg`），未签名，首次运行请右键打开 |
-| **Android** | Releases 页面下载 APK（`tomato-todo-vX.Y.Z-release.apk`），正式签名可直接覆盖升级 |
+| **Android** | Releases 页面下载 APK（`tomato-todo-vX.Y.Z-release.apk`）；**v1.2.10 起**使用固定正式签名，可在之后的正式版本间覆盖升级 |
+
+> ⚠️ **安卓升级注意**：GitHub Releases 的 v1.2.1～v1.2.9 APK 误用了每次构建不同的 debug 签名，无法直接覆盖安装 v1.2.10+。请先在旧版中把数据备份到 WebDAV 并确认上传成功，记下服务器路径和加密密码，再卸载旧版、安装新版并从 WebDAV 恢复。**卸载会清除本机数据；没有可恢复备份时不要卸载。**本机用正式 keystore 构建的测试版/正式版若签名相同，则可直接覆盖。
 
 也可以从源码自行构建，见下方「开发与构建」与「Android 构建与版本号」。
 
@@ -129,13 +131,13 @@ npm run android:sync    # 构建 Web 资源 + 同步版本号 + cap sync android
 ```
 
 - `versionName` = `package.json` 的 version（如 `1.2.0`）
-- `versionCode` = major × 10000 + minor × 100 + patch（如 `10200`），保证单调递增可覆盖安装
+- `versionCode` = major × 10000 + minor × 100 + patch（如 `10200`），保证单调递增；覆盖安装还要求 Android 签名相同
 - APK 文件名同样带版本号：`tomato-todo-v1.2.0-release.apk`
 - `android:sync` 已自动跑版本同步，直接改 `package.json` 再构建即可
 
 ### 正式签名（release）
 
-签名材料存放在仓库外：`D:/OneDrive/Private/keystore/todolist/`（keystore + `release-signing.properties`，含密码）。`build.gradle` 会自动读取并用于 release 构建；文件缺失时回退 debug 签名，保证任何环境可构建。
+签名材料存放在仓库外：`D:/OneDrive/Private/keystore/todolist/`（keystore + `release-signing.properties`，含密码）。本机 `build.gradle` 会自动读取；本机缺失时可以回退 debug 签名用于测试，但**CI 一律要求正式签名，并在发布前对照 keystore 校验 APK 证书**。
 
 ```bash
 cd android && gradlew assembleRelease

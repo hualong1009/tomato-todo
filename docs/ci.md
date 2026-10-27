@@ -11,6 +11,8 @@
 > | `KEYSTORE_PASSWORD` | keystore 密码 |
 > | `KEY_ALIAS` | 签名别名（本项目为 tomato-todo） |
 >
+> APK job 从 Secret 还原 keystore，并通过 `TOMATO_RELEASE_SIGNING_PROPERTIES` 显式指定 Android 工程内的签名配置。配置缺失或生成 APK 的证书 SHA-256 与 keystore 不一致时，流水线会失败，**绝不上传 debug 签名 APK**。GitHub Releases 的 v1.2.1～v1.2.9 APK 曾因错误路径而使用每次变化的 debug 签名，升级请先备份、卸载再安装 v1.2.10+。
+>
 > 把 keystore 转 base64（Windows PowerShell）：
 >
 > ```powershell
