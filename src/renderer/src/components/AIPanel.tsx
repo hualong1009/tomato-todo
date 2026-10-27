@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { RANGE_LABELS, buildSummaryContext } from '@shared/summary'
+import { listPromptTemplates } from '@shared/promptTemplates'
 import type { AIRequestResult, AppState, SummaryDates, SummaryRange } from '@shared/types'
 import { cleanError, formatDateTime } from '../utils/format'
 import { Markdown } from './Markdown'
@@ -53,6 +54,17 @@ export function AIPanel({ open, state, onClose, onOpenSettings, onToast }: AIPan
     }
   }, [state, range, dates])
   const result = results[rangeKey]
+  const templates = listPromptTemplates(state.settings)
+  const activeTemplateId = state.settings.activePromptTemplateId
+
+  const selectTemplate = (id: string) => {
+    const template = templates.find((item) => item.id === id)
+    if (!template) return
+    // 记住上次选择：promptTemplate 是旧字段镜像，保持与选中模板内容一致
+    void window.api
+      .updateSettings({ activePromptTemplateId: id, promptTemplate: template.content })
+      .catch(() => undefined)
+  }
   const configured = Boolean(state.settings.ai.apiKey && state.settings.ai.baseUrl && state.settings.ai.model)
 
   useEffect(() => {
@@ -137,6 +149,24 @@ export function AIPanel({ open, state, onClose, onOpenSettings, onToast }: AIPan
               {RANGE_LABELS[item]}
             </button>
           ))}
+        </div>
+
+        <div className="ai-template-row">
+          <label className="ai-template-select">
+            <span>输出模板</span>
+            <select
+              value={activeTemplateId}
+              onChange={(event) => selectTemplate(event.target.value)}
+              data-testid="ai-template-select"
+            >
+              {templates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name}
+                  {template.builtin ? '（内置）' : ''}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         {range === 'custom' && (

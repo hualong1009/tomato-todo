@@ -91,6 +91,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
     model: 'gpt-4o-mini'
   },
   promptTemplate: DEFAULT_PROMPT_TEMPLATE,
+  promptTemplates: [],
+  activePromptTemplateId: 'default',
   pomodoro: {
     focusMinutes: 25,
     breakMinutes: 5

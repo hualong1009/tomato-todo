@@ -127,9 +127,25 @@ export interface LocalBackupSettings {
   lastBackupAt: string | null
 }
 
+export interface PromptTemplate {
+  id: string
+  name: string
+  /** 提示词正文，支持 {{range}} / {{todos}} 等占位符 */
+  content: string
+  /** 内置默认模板，不可编辑、不可删除 */
+  builtin?: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 export interface AppSettings {
   ai: AISettings
+  /** 旧版单模板字段（兼容既有数据文件），normalise 时同步为当前选中模板的内容 */
   promptTemplate: string
+  /** 用户自定义模板（内置默认模板不存储，运行时合成） */
+  promptTemplates: PromptTemplate[]
+  /** 上次 AI 回顾使用的模板 id */
+  activePromptTemplateId: string
   pomodoro: PomodoroSettings
   general: GeneralSettings
   webdav: WebDAVSettings

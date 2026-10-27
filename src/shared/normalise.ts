@@ -5,7 +5,16 @@ import {
   DEFAULT_STICKY_COLOR,
   DEFAULT_STICKY_OPACITY
 } from './defaults'
-import type { AppSettings, AppState, Attachment, FocusSession, Group, Todo, Urgency } from './types'
+import type {
+  AppSettings,
+  AppState,
+  Attachment,
+  FocusSession,
+  Group,
+  PromptTemplate,
+  Todo,
+  Urgency
+} from './types'
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
@@ -143,15 +152,70 @@ export function normaliseState(raw: unknown): AppState {
     })
 
   const settingsSource = (source.settings ?? {}) as Partial<AppSettings>
+
+  // 提示词模板：内置默认 + 用户自定义；旧版只有一个 promptTemplate 字符串，一次性迁移
+  const legacyTemplate =
+    typeof settingsSource.promptTemplate === 'string' && settingsSource.promptTemplate.trim()
+      ? settingsSource.promptTemplate
+      : ''
+  const customTemplates = (
+    Array.isArray(settingsSource.promptTemplates) ? settingsSource.promptTemplates : []
+  )
+    .filter(
+      (template): template is PromptTemplate =>
+        Boolean(template) &&
+        typeof template.id === 'string' &&
+        template.id.trim() !== '' &&
+        template.id !== 'default' &&
+        typeof template.content === 'string' &&
+        template.content.trim() !== ''
+    )
+    .map((template) => ({
+      id: template.id,
+      name:
+        typeof template.name === 'string' && template.name.trim()
+          ? template.name.trim()
+          : '自定义模板',
+      content: template.content,
+      createdAt: typeof template.createdAt === 'string' ? template.createdAt : '',
+      updatedAt: typeof template.updatedAt === 'string' ? template.updatedAt : ''
+    }))
+  let migratedTemplateId = ''
+  if (
+    customTemplates.length === 0 &&
+    legacyTemplate &&
+    legacyTemplate !== DEFAULT_PROMPT_TEMPLATE
+  ) {
+    // 旧版用户改过单模板 → 升级成一个自定义模板，内容不丢且默认选中
+    migratedTemplateId = 'tpl-migrated'
+    customTemplates.push({
+      id: migratedTemplateId,
+      name: '我的模板',
+      content: legacyTemplate,
+      createdAt: '',
+      updatedAt: ''
+    })
+  }
+  const activeTemplateId =
+    typeof settingsSource.activePromptTemplateId === 'string' &&
+    (settingsSource.activePromptTemplateId === 'default' ||
+      customTemplates.some((template) => template.id === settingsSource.activePromptTemplateId))
+      ? settingsSource.activePromptTemplateId
+      : migratedTemplateId || 'default'
+  const activeTemplateContent =
+    activeTemplateId === 'default'
+      ? DEFAULT_PROMPT_TEMPLATE
+      : customTemplates.find((template) => template.id === activeTemplateId)?.content ??
+        DEFAULT_PROMPT_TEMPLATE
+
   const settings: AppSettings = {
     ai: {
       ...fallback.settings.ai,
       ...(settingsSource.ai ?? {})
     },
-    promptTemplate:
-      typeof settingsSource.promptTemplate === 'string' && settingsSource.promptTemplate.trim()
-        ? settingsSource.promptTemplate
-        : DEFAULT_PROMPT_TEMPLATE,
+    promptTemplate: activeTemplateContent,
+    promptTemplates: customTemplates,
+    activePromptTemplateId: activeTemplateId,
     pomodoro: {
       ...fallback.settings.pomodoro,
       ...(settingsSource.pomodoro ?? {})

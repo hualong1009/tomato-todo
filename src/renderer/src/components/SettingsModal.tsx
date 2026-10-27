@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { DEFAULT_PROMPT_TEMPLATE } from '@shared/defaults'
-import type { AppSettings, McpInfo, WebDAVSettings } from '@shared/types'
+import type { AppSettings, McpInfo, PromptTemplate, WebDAVSettings } from '@shared/types'
 import {
   acceleratorFromEvent,
   cleanError,
@@ -24,6 +24,7 @@ import {
   EyeIcon,
   EyeOffIcon,
   LockIcon,
+  PencilIcon,
   SettingsIcon,
   SparklesIcon,
   TimerIcon,
@@ -62,6 +63,11 @@ const AUTO_LOCK_OPTIONS = [
   { value: '60', label: '1 小时', color: '#b38cff' }
 ]
 
+import {
+  DEFAULT_TEMPLATE_ID,
+  duplicatePromptTemplate,
+  listPromptTemplates
+} from '@shared/promptTemplates'
 const PLACEHOLDERS = [
   '{{range}}',
   '{{rangeStart}}',
@@ -98,6 +104,8 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast }: Sett
   const [passwordDraft, setPasswordDraft] = useState({ current: '', next: '', confirm: '' })
   const [passwordBusy, setPasswordBusy] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
+  const [editingTemplateId, setEditingTemplateId] = useState<string>(DEFAULT_TEMPLATE_ID)
+  const [confirmDeleteTemplateId, setConfirmDeleteTemplateId] = useState<string | null>(null)
   const [resetPassword, setResetPassword] = useState('')
   const [resetBusy, setResetBusy] = useState(false)
   const hasPassword = settings.security.passwordHash !== ''
@@ -105,6 +113,8 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast }: Sett
   useEffect(() => {
     if (open) {
       setDraft(structuredClone(settings))
+      setEditingTemplateId(settings.activePromptTemplateId || DEFAULT_TEMPLATE_ID)
+      setConfirmDeleteTemplateId(null)
       setAiTest(null)
       setAiModels([])
       setWebdavResult(null)
@@ -193,6 +203,57 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast }: Sett
     } finally {
       setFileBusy(null)
     }
+  }
+
+  const templates = listPromptTemplates(draft)
+  const editingTemplate =
+    templates.find((template) => template.id === editingTemplateId) ?? templates[0]
+
+  const patchTemplateDraft = (patch: {
+    promptTemplates?: PromptTemplate[]
+    activePromptTemplateId?: string
+    promptTemplate?: string
+  }) => {
+    setDraft((previous) => ({ ...previous, ...patch }))
+  }
+
+  const addTemplateFrom = (base: PromptTemplate) => {
+    const template = duplicatePromptTemplate(base)
+    patchTemplateDraft({
+      promptTemplates: [...draft.promptTemplates, template],
+      activePromptTemplateId: template.id,
+      promptTemplate: template.content
+    })
+    setEditingTemplateId(template.id)
+    onToast(`已从「${base.name}」复制出新模板`, 'success')
+  }
+
+  const editTemplateField = (changes: { name?: string; content?: string }) => {
+    if (editingTemplate.builtin) return
+    patchTemplateDraft({
+      promptTemplates: draft.promptTemplates.map((template) =>
+        template.id === editingTemplate.id
+          ? { ...template, ...changes, updatedAt: new Date().toISOString() }
+          : template
+      ),
+      promptTemplate:
+        editingTemplate.id === draft.activePromptTemplateId
+          ? changes.content ?? editingTemplate.content
+          : draft.promptTemplate
+    })
+  }
+
+  const removeTemplate = (id: string) => {
+    const remaining = draft.promptTemplates.filter((template) => template.id !== id)
+    const activeFallsBack = draft.activePromptTemplateId === id
+    patchTemplateDraft({
+      promptTemplates: remaining,
+      activePromptTemplateId: activeFallsBack ? DEFAULT_TEMPLATE_ID : draft.activePromptTemplateId,
+      promptTemplate: activeFallsBack ? DEFAULT_PROMPT_TEMPLATE : draft.promptTemplate
+    })
+    if (editingTemplateId === id) setEditingTemplateId(DEFAULT_TEMPLATE_ID)
+    setConfirmDeleteTemplateId(null)
+    onToast('模板已删除', 'success')
   }
 
   const save = async (): Promise<boolean> => {
@@ -501,34 +562,125 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast }: Sett
               <section className="settings-section">
                 <h3>提示词模板</h3>
                 <p className="settings-desc">
-                  AI 回顾会把下面的占位符替换成实时数据。可自由调整分析角度、输出格式与字数要求。
+                  AI 回顾会把占位符替换成实时数据。默认模板不可修改，可复制出新的模板自由编辑；删除前会二次确认。
                 </p>
-                <div className="placeholder-list">
-                  {PLACEHOLDERS.map((placeholder) => (
-                    <code key={placeholder}>{placeholder}</code>
+
+                <div className="template-list" data-testid="template-list">
+                  {templates.map((template) => (
+                    <div
+                      key={template.id}
+                      className={`template-row ${
+                        template.id === editingTemplateId ? 'active' : ''
+                      } ${template.id === draft.activePromptTemplateId ? 'current' : ''}`}
+                      onClick={() => setEditingTemplateId(template.id)}
+                      data-testid={`template-row-${template.id}`}
+                    >
+                      <div className="template-row-main">
+                        <strong>{template.name}</strong>
+                        {template.builtin ? (
+                          <span className="template-badge">内置 · 不可修改</span>
+                        ) : (
+                          <span className="muted">{template.content.length} 字符</span>
+                        )}
+                        {template.id === draft.activePromptTemplateId && !template.builtin && (
+                          <span className="template-badge used">上次使用</span>
+                        )}
+                      </div>
+                      <div className="template-row-actions">
+                        <button
+                          className="tiny-btn"
+                          title="复制为新模板"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            addTemplateFrom(template)
+                          }}
+                          data-testid={`template-copy-${template.id}`}
+                        >
+                          <CopyIcon size={15} />
+                        </button>
+                        {!template.builtin && (
+                          <>
+                            <button
+                              className="tiny-btn"
+                              title="编辑"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setEditingTemplateId(template.id)
+                              }}
+                            >
+                              <PencilIcon size={15} />
+                            </button>
+                            {confirmDeleteTemplateId === template.id ? (
+                              <ConfirmDialog
+                                open
+                                title="删除模板"
+                                message={`确定删除「${template.name}」？保存设置后生效。`}
+                                confirmLabel="删除"
+                                danger
+                                onClose={() => setConfirmDeleteTemplateId(null)}
+                                onConfirm={() => removeTemplate(template.id)}
+                              />
+                            ) : null}
+                            <button
+                              className="tiny-btn"
+                              title="删除"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setConfirmDeleteTemplateId(template.id)
+                              }}
+                              data-testid={`template-delete-${template.id}`}
+                            >
+                              <TrashIcon size={15} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   ))}
                 </div>
-                <textarea
-                  className="prompt-editor"
-                  value={draft.promptTemplate}
-                  onChange={(event) =>
-                    setDraft((previous) => ({ ...previous, promptTemplate: event.target.value }))
-                  }
-                  rows={18}
-                  data-testid="setting-prompt-template"
-                />
-                <div className="settings-inline space-between">
-                  <span className="muted">{draft.promptTemplate.length} 字符</span>
-                  <button
-                    className="btn ghost small"
-                    onClick={() =>
-                      setDraft((previous) => ({ ...previous, promptTemplate: DEFAULT_PROMPT_TEMPLATE }))
-                    }
-                    data-testid="setting-prompt-reset"
-                  >
-                    恢复默认模板
-                  </button>
-                </div>
+
+                <button
+                  className="btn ghost small"
+                  onClick={() => addTemplateFrom(templates[0])}
+                  data-testid="template-add"
+                >
+                  <CopyIcon size={14} />
+                  从默认模板新建
+                </button>
+
+                {confirmDeleteTemplateId ? null : (
+                  <div className="template-editor">
+                    <div className="settings-inline space-between">
+                      <label className="field template-name">
+                        <span>模板名称</span>
+                        <input
+                          value={editingTemplate.builtin ? editingTemplate.name : editingTemplate.name}
+                          onChange={(event) => editTemplateField({ name: event.target.value })}
+                          disabled={editingTemplate.builtin}
+                          data-testid="template-name-input"
+                        />
+                      </label>
+                      {editingTemplate.builtin ? (
+                        <span className="muted">默认模板不可修改，请先复制出新模板</span>
+                      ) : (
+                        <span className="muted">{editingTemplate.content.length} 字符</span>
+                      )}
+                    </div>
+                    <div className="placeholder-list">
+                      {PLACEHOLDERS.map((placeholder) => (
+                        <code key={placeholder}>{placeholder}</code>
+                      ))}
+                    </div>
+                    <textarea
+                      className="prompt-editor"
+                      value={editingTemplate.content}
+                      onChange={(event) => editTemplateField({ content: event.target.value })}
+                      disabled={editingTemplate.builtin}
+                      rows={16}
+                      data-testid="setting-prompt-template"
+                    />
+                  </div>
+                )}
               </section>
             )}
 
