@@ -1,0 +1,97 @@
+# 打 v* 标签时：构建正式签名的 Android APK 并上传到 Release
+name: Android Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # 允许把产物发布到 GitHub Release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: 安装依赖
+        run: npm ci
+
+      # 从 package.json 读版本号，同步到 android/app/build.gradle
+      - name: 同步版本号
+        run: node scripts/sync-android-version.mjs
+
+      # GitHub 的 runner 在境外，恢复官方 gradle 发行地址（本地改过的镜像不影响仓库）
+      - name: 恢复官方 Gradle 发行地址
+        run: |
+          python3 - <<'EOF'
+          import io
+          p = 'android/gradle/wrapper/gradle-wrapper.properties'
+          s = io.open(p, encoding='utf-8').read()
+          s = s.replace('mirrors.cloud.tencent.com/gradle', 'services.gradle.org/distributions')
+          io.open(p, 'w', encoding='utf-8', newline='\n').write(s)
+          EOF
+
+      - name: 构建 Web 资源并同步到 Android 工程
+        run: |
+          npm run build:web
+          npx cap sync android
+
+      - name: 写入签名信息
+        run: |
+          mkdir -p $HOME/keystore
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > $HOME/keystore/tomato-todo-release.keystore
+          cat > android/release-signing.properties <<EOF
+          storeFile=$HOME/keystore/tomato-todo-release.keystore
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          keyPassword=${{ secrets.KEYSTORE_PASSWORD }}
+          EOF
+          # build.gradle 读取的是固定路径 D:/OneDrive/...（本机约定），CI 上改写成相对路径
+          python3 - <<'EOF'
+          import io
+          p = 'android/app/build.gradle'
+          s = io.open(p, encoding='utf-8').read()
+          s = s.replace("rootProject.file('D:/OneDrive/Private/keystore/todolist/release-signing.properties')",
+                        "rootProject.file('../release-signing.properties')")
+          io.open(p, 'w', encoding='utf-8', newline='\n').write(s)
+          EOF
+
+      - name: 构建 release APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: 重命名产物（带版本号）
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          cp android/app/build/outputs/apk/release/app-release.apk "tomato-todo-v${VERSION}-release.apk"
+          ls -la tomato-todo-v*-release.apk
+
+      - name: 校验签名
+        run: |
+          BUILD_TOOLS=$(ls -d $ANDROID_HOME/build-tools/* | sort | tail -1)
+          "$BUILD_TOOLS/apksigner" verify --print-certs "tomato-todo-v${GITHUB_REF_NAME#v}-release.apk" | head -3
+
+      - name: 上传到 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: tomato-todo-v*-release.apk
+          generate_release_notes: true
+
+      - name: 同时上传为构建产物（Release 失败时仍可下载）
+        uses: actions/upload-artifact@v4
+        with:
+          name: tomato-todo-apk
+          path: tomato-todo-v*-release.apk
