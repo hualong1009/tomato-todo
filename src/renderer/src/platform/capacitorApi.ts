@@ -75,13 +75,55 @@ const widgetPlugin = Capacitor.isNativePlatform()
   ? registerPlugin<{ update(options: { summary: string }): Promise<void> }>('TomatoWidget')
   : null
 
+interface SafeAreaInsets {
+  top: number
+  bottom: number
+  left: number
+  right: number
+}
+
 /**
  * 系统栏外观通道：让状态栏/手势条跟随应用主题（透明沉浸式 + 图标明暗）。
+ * activateWebViewInsets：Web 层就绪后接管 insets 留白——原生返回当前 insets
+ * 并清掉自己的 padding，让应用背景（含渐变）绘制到系统栏底下，与界面无缝；
+ * 之后 insets 变化（旋转/键盘/手势条）通过 safeArea 事件持续推送。
  */
 const themePlugin = Capacitor.isNativePlatform()
-  ? registerPlugin<{ apply(options: { scheme: string }): Promise<void> }>('TomatoTheme')
+  ? registerPlugin<{
+      apply(options: { scheme: string }): Promise<void>
+      activateWebViewInsets(): Promise<SafeAreaInsets>
+      addListener(
+        eventName: 'safeArea',
+        listener: (data: SafeAreaInsets) => void
+      ): Promise<{ remove: () => void }>
+    }>('TomatoTheme')
   : null
 let lastScheme: string | null = null
+
+function applySafeAreaInsets(data: SafeAreaInsets): void {
+  if (typeof document === 'undefined') return
+  const root = document.documentElement
+  if (data.top > 0) root.style.setProperty('--safe-top', `${data.top}px`)
+  if (data.bottom > 0) root.style.setProperty('--safe-bottom', `${data.bottom}px`)
+  if (data.left > 0) root.style.setProperty('--safe-left', `${data.left}px`)
+  if (data.right > 0) root.style.setProperty('--safe-right', `${data.right}px`)
+}
+
+let insetsSetup = false
+
+function setupWebViewInsets(): void {
+  if (!themePlugin || insetsSetup) return
+  insetsSetup = true
+  themePlugin
+    .activateWebViewInsets()
+    .then(applySafeAreaInsets)
+    .catch(() => undefined)
+  themePlugin
+    .addListener('safeArea', (data) => {
+      applySafeAreaInsets(data)
+    })
+    .catch(() => undefined)
+}
 
 function systemPrefersDark(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
@@ -135,6 +177,7 @@ function emit(): void {
   persistSoon()
   syncWidget()
   syncTheme()
+  setupWebViewInsets()
   for (const listener of stateListeners) listener(state)
 }
 

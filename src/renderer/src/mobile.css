@@ -1,12 +1,19 @@
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
 /* ============================================================
    移动端（Capacitor / 手机浏览器）专用布局
    桌面端布局完全不受影响，所有样式都挂在 .mobile-app / .sheet 下
    ============================================================ */
 
 .app-root.mobile-app {
-  padding-top: env(safe-area-inset-top, 0px);
-  padding-left: env(safe-area-inset-left, 0px);
-  padding-right: env(safe-area-inset-right, 0px);
+  padding-top: var(--safe-top, 0px);
+  padding-left: var(--safe-left, 0px);
+  padding-right: var(--safe-right, 0px);
 }
 
 .mobile-shell {
@@ -130,7 +137,7 @@
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding: 0 12px calc(104px + env(safe-area-inset-bottom, 0px));
+  padding: 0 12px calc(104px + var(--safe-bottom, 0px));
 }
 
 .mobile-main .composer {
@@ -178,7 +185,7 @@
 .mobile-fab {
   position: fixed;
   right: 18px;
-  bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(80px + var(--safe-bottom, 0px));
   z-index: 45;
   width: 58px;
   height: 58px;
@@ -206,7 +213,7 @@
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 2px;
-  padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+  padding: 6px 8px calc(6px + var(--safe-bottom, 0px));
   border-top: 1px solid var(--line);
   background: color-mix(in srgb, var(--panel-solid) 88%, transparent);
   backdrop-filter: blur(26px) saturate(160%);
@@ -306,12 +313,12 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 6px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  padding: 6px 16px calc(14px + var(--safe-bottom, 0px));
 }
 
 .sheet-footer {
   flex: 0 0 auto;
-  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  padding: 10px 16px calc(10px + var(--safe-bottom, 0px));
   border-top: 1px solid var(--line);
 }
 
@@ -396,7 +403,7 @@
 }
 
 .action-cancel {
-  margin: 8px 8px calc(10px + env(safe-area-inset-bottom, 0px));
+  margin: 8px 8px calc(10px + var(--safe-bottom, 0px));
   min-height: 52px;
   border: 0;
   border-radius: 15px;
@@ -541,8 +548,8 @@
   width: 100%;
   flex-basis: auto;
   border-left: 0;
-  padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-top: var(--safe-top, 0px);
+  padding-bottom: var(--safe-bottom, 0px);
   animation: detailIn 0.22s ease both;
 }
 
@@ -612,7 +619,7 @@
 }
 
 .mobile-app .settings-content {
-  padding: 14px 14px calc(20px + env(safe-area-inset-bottom, 0px));
+  padding: 14px 14px calc(20px + var(--safe-bottom, 0px));
 }
 
 .mobile-app .settings-section h3 {
@@ -637,7 +644,7 @@
 /* ---------- 番茄钟迷你条 ---------- */
 .mobile-pomodoro-pill {
   position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  top: calc(var(--safe-top, 0px) + 8px);
   right: 12px;
   z-index: 50;
 }

@@ -9,8 +9,8 @@ import android.view.Window;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -21,8 +21,10 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  * 系统栏（状态栏 / 手势条）外观：跟随应用主题改为透明沉浸式。
  *
  * targetSdk 35+ 系统强制边到边绘制，窗口颜色会被忽略，所以：
- * 1. 窗口与内容背景色 = 主题背景色（系统栏区域露出的就是主题色）
- * 2. 内容按系统 insets 留白（applyInsetsPadding），按钮不会被系统栏压住
+ * 1. 窗口与内容背景色 = 主题背景色（Web 层就绪前的兜底底色）
+ * 2. 启动阶段用原生 insets 给内容留白；Web 层就绪后调用 activateWebViewInsets，
+ *    由原生把 insets 数值传给 JS，用 CSS 变量留白——这样应用背景（含渐变）
+ *    可以真正绘制到系统栏底下，与界面完全无缝
  * 3. 关闭状态栏 / 导航栏的强制对比遮罩（否则透明栏上会有一层白色纱罩）
  *
  * 注意：插件方法运行在桥接线程，所有窗口操作必须切回主线程，
@@ -35,6 +37,26 @@ public class ThemePlugin extends Plugin {
     private static final int BG_DARK = 0xFF070A12;
     private static final int BG_LIGHT = 0xFFEDF1F7;
 
+    private static ThemePlugin instance;
+    /** Web 层是否已接管 insets（true 时原生不再 padding，由 CSS 变量留白） */
+    private static volatile boolean webHandlesInsets = false;
+    private static int lastTop = 0;
+    private static int lastBottom = 0;
+    private static int lastLeft = 0;
+    private static int lastRight = 0;
+
+    @Override
+    public void load() {
+        super.load();
+        instance = this;
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        if (instance == this) instance = null;
+        super.handleOnDestroy();
+    }
+
     @PluginMethod
     public void apply(PluginCall call) {
         String scheme = call.getString("scheme", "dark");
@@ -46,6 +68,40 @@ public class ThemePlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("ok", true);
         call.resolve(ret);
+    }
+
+    /**
+     * Web 层就绪后接管 insets：返回当前 insets 数值并把原生 padding 清零，
+     * 之后 insets 变化（旋转、键盘、手势条）通过 safeArea 事件持续推给 JS。
+     */
+    @PluginMethod
+    public void activateWebViewInsets(PluginCall call) {
+        webHandlesInsets = true;
+        final Activity activity = getActivity();
+        if (activity != null) {
+            activity.runOnUiThread(() -> {
+                View content = activity.findViewById(android.R.id.content);
+                if (content != null) {
+                    content.setPadding(0, 0, 0, 0);
+                    content.requestApplyInsets();
+                }
+            });
+        }
+        JSObject ret = new JSObject();
+        ret.put("top", lastTop);
+        ret.put("bottom", lastBottom);
+        ret.put("left", lastLeft);
+        ret.put("right", lastRight);
+        call.resolve(ret);
+    }
+
+    private void dispatchSafeArea() {
+        JSObject data = new JSObject();
+        data.put("top", lastTop);
+        data.put("bottom", lastBottom);
+        data.put("left", lastLeft);
+        data.put("right", lastRight);
+        notifyListeners("safeArea", data);
     }
 
     static void applyToWindow(Activity activity, boolean isLight) {
@@ -64,7 +120,7 @@ public class ThemePlugin extends Plugin {
             } catch (Exception ignored) {
             }
         }
-        // 内容视图背景也刷成主题色，保证 insets 留白区域一定是主题色
+        // 内容视图背景也刷成主题色，保证 Web 层就绪前 insets 留白区域是主题色
         View content = activity.findViewById(android.R.id.content);
         if (content != null) {
             content.setBackgroundColor(isLight ? BG_LIGHT : BG_DARK);
@@ -76,7 +132,7 @@ public class ThemePlugin extends Plugin {
     }
 
     /**
-     * 让内容避开系统栏与键盘：按 insets 给内容视图留白。
+     * 启动阶段让内容避开系统栏与键盘（Web 层就绪后由 CSS 变量接管）。
      * WebView 里 env(safe-area-inset-*) 在 Android 上恒为 0，必须在原生侧处理。
      */
     static void applyInsetsPadding(Activity activity) {
@@ -89,7 +145,18 @@ public class ThemePlugin extends Plugin {
                     WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout()
                 );
                 Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime());
-                view.setPadding(bars.left, bars.top, bars.right, Math.max(bars.bottom, ime.bottom));
+                lastTop = bars.top;
+                lastLeft = bars.left;
+                lastRight = bars.right;
+                // 键盘弹出时内容要整体抬到键盘上方
+                lastBottom = Math.max(bars.bottom, ime.bottom);
+                if (!webHandlesInsets) {
+                    view.setPadding(lastLeft, lastTop, lastRight, lastBottom);
+                }
+                ThemePlugin plugin = instance;
+                if (plugin != null && webHandlesInsets) {
+                    plugin.dispatchSafeArea();
+                }
                 return insets;
             }
         );

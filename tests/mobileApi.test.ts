@@ -35,7 +35,9 @@ vi.mock('@capacitor/core', () => ({
   },
   registerPlugin: () => ({
     update: async () => undefined,
-    apply: async () => undefined
+    apply: async () => undefined,
+    activateWebViewInsets: async () => ({ top: 40, bottom: 30, left: 0, right: 0 }),
+    addListener: async () => ({ remove: () => undefined })
   })
 }))
 
