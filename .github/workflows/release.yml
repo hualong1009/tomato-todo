@@ -84,17 +84,12 @@ jobs:
           BUILD_TOOLS=$(ls -d $ANDROID_HOME/build-tools/* | sort | tail -1)
           "$BUILD_TOOLS/apksigner" verify --print-certs "tomato-todo-v${GITHUB_REF_NAME#v}-release.apk" | head -3
 
-      - name: 上传到 GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: 发布产物与说明
+        uses: ./.github/actions/publish-release
         with:
           files: tomato-todo-v*-release.apk
-          generate_release_notes: true
-
-      - name: 同时上传为构建产物（Release 失败时仍可下载）
-        uses: actions/upload-artifact@v4
-        with:
-          name: tomato-todo-apk
-          path: tomato-todo-v*-release.apk
+          artifact-name: tomato-todo-apk
+          artifact-path: tomato-todo-v*-release.apk
 
   windows:
     runs-on: windows-latest
@@ -133,17 +128,12 @@ jobs:
           done
           ls -la dist-win/
 
-      - name: 上传到 GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: 发布产物与说明
+        uses: ./.github/actions/publish-release
         with:
           files: dist-win/*.exe
-          generate_release_notes: true
-
-      - name: 同时上传为构建产物（Release 失败时仍可下载）
-        uses: actions/upload-artifact@v4
-        with:
-          name: tomato-todo-windows
-          path: dist-win/*.exe
+          artifact-name: tomato-todo-windows
+          artifact-path: dist-win/*.exe
 
   linux:
     runs-on: ubuntu-latest
@@ -178,17 +168,12 @@ jobs:
           cp release/tomato-todo*"${VERSION}"* dist-linux/ 2>/dev/null || true
           ls -la dist-linux/
 
-      - name: 上传到 GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: 发布产物与说明
+        uses: ./.github/actions/publish-release
         with:
           files: dist-linux/*
-          generate_release_notes: true
-
-      - name: 同时上传为构建产物（Release 失败时仍可下载）
-        uses: actions/upload-artifact@v4
-        with:
-          name: tomato-todo-linux
-          path: dist-linux/*
+          artifact-name: tomato-todo-linux
+          artifact-path: dist-linux/*
 
   macos:
     runs-on: macos-latest
@@ -222,14 +207,9 @@ jobs:
           cp release/tomato-todo-*"${VERSION}"*.dmg dist-mac/ 2>/dev/null || true
           ls -la dist-mac/
 
-      - name: 上传到 GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: 发布产物与说明
+        uses: ./.github/actions/publish-release
         with:
           files: dist-mac/*
-          generate_release_notes: true
-
-      - name: 同时上传为构建产物（Release 失败时仍可下载）
-        uses: actions/upload-artifact@v4
-        with:
-          name: tomato-todo-macos
-          path: dist-mac/*
+          artifact-name: tomato-todo-macos
+          artifact-path: dist-mac/*

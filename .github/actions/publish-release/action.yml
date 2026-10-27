@@ -1,0 +1,58 @@
+name: '发布产物与说明'
+description: '上传产物到 GitHub Release：存在 docs/releases/vX.Y.Z.md 时用它做发布说明（首行 H1 作为标题），否则自动生成。'
+inputs:
+  files:
+    description: '要上传到 Release 的文件（glob）'
+    required: true
+  artifact-name:
+    description: '同时上传为构建产物（actions/upload-artifact）的名称'
+    required: true
+  artifact-path:
+    description: '构建产物的上传路径'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: 准备发布说明
+      id: notes
+      shell: bash
+      run: |
+        VERSION="${GITHUB_REF_NAME#v}"
+        FILE="docs/releases/v${VERSION}.md"
+        if [ -f "$FILE" ]; then
+          echo "use=file" >> "$GITHUB_OUTPUT"
+          echo "body_path=$FILE" >> "$GITHUB_OUTPUT"
+          # 首行 H1 作为 Release 标题
+          TITLE=$(sed -n 's/^# *//p' "$FILE" | head -1)
+          if [ -n "$TITLE" ]; then
+            echo "name=$TITLE" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=🍅 番茄待办 v${VERSION}" >> "$GITHUB_OUTPUT"
+          fi
+        else
+          echo "use=auto" >> "$GITHUB_OUTPUT"
+          echo "name=🍅 番茄待办 v${VERSION}" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: 上传到 GitHub Release（仓库内说明文件）
+      if: steps.notes.outputs.use == 'file'
+      uses: softprops/action-gh-release@v2
+      with:
+        files: ${{ inputs.files }}
+        body_path: ${{ steps.notes.outputs.body_path }}
+        name: ${{ steps.notes.outputs.name }}
+
+    - name: 上传到 GitHub Release（自动生成说明）
+      if: steps.notes.outputs.use == 'auto'
+      uses: softprops/action-gh-release@v2
+      with:
+        files: ${{ inputs.files }}
+        name: ${{ steps.notes.outputs.name }}
+        generate_release_notes: true
+
+    - name: 同时上传为构建产物（Release 失败时仍可下载）
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ inputs.artifact-path }}
