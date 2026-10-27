@@ -104,8 +104,19 @@ npm run android:sync    # 构建 Web 资源 + 同步版本号 + cap sync android
 
 - `versionName` = `package.json` 的 version（如 `1.2.0`）
 - `versionCode` = major × 10000 + minor × 100 + patch（如 `10200`），保证单调递增可覆盖安装
-- APK 文件名同样带版本号：`tomato-todo-v1.2.0-debug.apk`
+- APK 文件名同样带版本号：`tomato-todo-v1.2.0-release.apk`
 - `android:sync` 已自动跑版本同步，直接改 `package.json` 再构建即可
+
+### 正式签名（release）
+
+签名材料存放在仓库外：`D:/OneDrive/Private/keystore/todolist/`（keystore + `release-signing.properties`，含密码）。`build.gradle` 会自动读取并用于 release 构建；文件缺失时回退 debug 签名，保证任何环境可构建。
+
+```bash
+cd android && gradlew assembleRelease
+# 产物：android/app/build/outputs/apk/release/app-release.apk
+```
+
+**务必长期备份** keystore 与密码文件：丢失后将无法再发布可覆盖升级的正式包。日常自测仍可用 `assembleDebug`。
 
 ## 测试
 

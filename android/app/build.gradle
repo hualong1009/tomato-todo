@@ -16,10 +16,35 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // 正式签名信息存放在仓库外（keystore 目录），缺失时自动回退 debug 签名，
+    // 保证任何环境都能构建；properties 文件格式见 keystore 目录 release-signing.properties
+    def releaseSigningPropsFile = rootProject.file('D:/OneDrive/Private/keystore/todolist/release-signing.properties')
+    def releaseSigningProps = new Properties()
+    if (releaseSigningPropsFile.exists()) {
+        releaseSigningPropsFile.withInputStream { releaseSigningProps.load(it) }
+    }
+
+    signingConfigs {
+        release {
+            if (releaseSigningPropsFile.exists()) {
+                storeFile file(releaseSigningProps['storeFile'])
+                storePassword releaseSigningProps['storePassword']
+                keyAlias releaseSigningProps['keyAlias']
+                keyPassword releaseSigningProps['keyPassword']
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (releaseSigningPropsFile.exists()) {
+                signingConfig signingConfigs.release
+            } else {
+                // 没有正式签名配置时回退 debug 签名（仅本机构建可用）
+                signingConfig signingConfigs.debug
+            }
         }
     }
 }
