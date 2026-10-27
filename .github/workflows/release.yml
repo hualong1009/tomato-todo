@@ -82,13 +82,15 @@ jobs:
           BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
           APK="tomato-todo-v${GITHUB_REF_NAME#v}-release.apk"
           CERTS=$("$BUILD_TOOLS/apksigner" verify --print-certs "$APK")
-          ACTUAL=$(printf '%s\n' "$CERTS" | awk -F': ' '/certificate SHA-256 digest:/{print $2; exit}')
+          # apksigner 的行可能以 "V2 Signer: certificate ...: <hash>" 开头，
+          # 取最后一个字段，而不是第二个字段（第二个是 certificate 标签）。
+          ACTUAL=$(printf '%s\n' "$CERTS" | awk -F': ' '/certificate SHA-256 digest:/{print $NF; exit}')
           EXPECTED=$(keytool -exportcert \
             -keystore "$HOME/keystore/tomato-todo-release.keystore" \
             -alias '${{ secrets.KEY_ALIAS }}' \
             -storepass '${{ secrets.KEYSTORE_PASSWORD }}' 2>/dev/null | sha256sum | cut -d' ' -f1)
           if [ -z "$ACTUAL" ] || [ "$ACTUAL" != "$EXPECTED" ]; then
-            echo 'ERROR: APK signing certificate does not match the release keystore; refusing to publish.' >&2
+            echo "ERROR: APK signing certificate ($ACTUAL) does not match release keystore ($EXPECTED); refusing to publish." >&2
             exit 1
           fi
           echo "Release APK certificate SHA-256 verified: $ACTUAL"
