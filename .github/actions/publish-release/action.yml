@@ -22,14 +22,15 @@ runs:
         FILE="docs/releases/v${VERSION}.md"
         if [ -f "$FILE" ]; then
           echo "use=file" >> "$GITHUB_OUTPUT"
-          echo "body_path=$FILE" >> "$GITHUB_OUTPUT"
-          # 首行 H1 作为 Release 标题
+          # 首行 H1 作为 Release 标题，正文去掉首行避免重复
           TITLE=$(sed -n 's/^# *//p' "$FILE" | head -1)
           if [ -n "$TITLE" ]; then
             echo "name=$TITLE" >> "$GITHUB_OUTPUT"
           else
             echo "name=🍅 番茄待办 v${VERSION}" >> "$GITHUB_OUTPUT"
           fi
+          sed '1d' "$FILE" | sed '/./,$!d' > "$RUNNER_TEMP/release-body.md"
+          echo "body_path=$RUNNER_TEMP/release-body.md" >> "$GITHUB_OUTPUT"
         else
           echo "use=auto" >> "$GITHUB_OUTPUT"
           echo "name=🍅 番茄待办 v${VERSION}" >> "$GITHUB_OUTPUT"
