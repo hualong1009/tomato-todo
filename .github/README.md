@@ -1,7 +1,7 @@
 > 本文件说明本项目在 GitHub Actions 上的自动构建方式。
 >
 > - `.github/workflows/ci.yml`：每次 push / PR 跑类型检查与全部测试
-> - `.github/workflows/android-release.yml`：打 `v*` 标签时构建签名 APK 并上传
+> - `.github/workflows/release.yml`：打 `v*` 标签时构建签名 APK + Windows NSIS 安装包并上传到 Release
 >
 > 使用前需要在仓库 Settings → Secrets and variables → Actions 配置：
 >

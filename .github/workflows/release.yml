@@ -1,5 +1,5 @@
-# 打 v* 标签时：构建正式签名的 Android APK 并上传到 Release
-name: Android Release
+# 打 v* 标签时：构建正式签名的 Android APK + Windows 安装包，上传到 Release
+name: Release
 
 on:
   push:
@@ -95,3 +95,49 @@ jobs:
         with:
           name: tomato-todo-apk
           path: tomato-todo-v*-release.apk
+
+  windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 构建主进程 / 渲染层 / MCP 入口
+        run: npm run build
+
+      - name: 构建 NSIS 安装包
+        run: npx electron-builder --win
+        env:
+          # CI 上缓存 Electron 构建依赖
+          USE_HARD_LINKS: 'false'
+
+      - name: 重命名产物（带版本号）
+        shell: bash
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          mkdir -p dist-win
+          cp release/*Setup.exe "dist-win/番茄待办-v${VERSION}-setup.exe" 2>/dev/null || true
+          cp release/*.exe dist-win/ 2>/dev/null || true
+          ls -la dist-win/
+
+      - name: 上传到 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-win/*.exe
+          generate_release_notes: true
+
+      - name: 同时上传为构建产物（Release 失败时仍可下载）
+        uses: actions/upload-artifact@v4
+        with:
+          name: tomato-todo-windows
+          path: dist-win/*.exe

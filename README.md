@@ -1,8 +1,29 @@
 # 番茄待办
 
-Windows 桌面待办应用：分组、状态视图、桌面便签、番茄专注、AI 回顾、WebDAV 备份与 MCP 接口。
+[![CI](https://github.com/hualong1009/tomato-todo/actions/workflows/ci.yml/badge.svg)](https://github.com/hualong1009/tomato-todo/actions/workflows/ci.yml)
 
-同一个 React 渲染层也可以打包成 **安卓 App**（Capacitor），详见下方「安卓版」章节。
+一套代码、两端运行的个人待办与专注管理工具：**Windows 桌面版**（Electron）与 **Android 版**（Capacitor）共用同一份 React 渲染层与业务逻辑，涵盖待办管理、分组、紧急程度、附件、桌面便签、番茄钟、AI 回顾与加密备份，并提供 MCP 数据接口让外部 Agent 直接读写待办。
+
+## 下载
+
+| 平台 | 说明 |
+| --- | --- |
+| **Windows** | [Releases](https://github.com/hualong1009/tomato-todo/releases) 页面下载 NSIS 安装包（`番茄待办-vX.Y.Z-setup.exe`） |
+| **Android** | Releases 页面下载 APK（`tomato-todo-vX.Y.Z-release.apk`），正式签名可直接覆盖升级 |
+
+也可以从源码自行构建，见下方「开发与构建」与「Android 构建与版本号」。
+
+## 项目介绍
+
+番茄待办把「待办管理」和「专注执行」放在一个应用里：
+
+- **待办即系统**：分组、紧急程度、期望/实际时间、状态视图、归档；详情是富文本 Markdown（图片自动压缩、附件内嵌），默认只读预览、点铅笔才进编辑，避免误触。
+- **执行工具**：待办可固定为桌面便签（独立颜色/透明度）；内置番茄钟，专注段自动记录进任务，为回顾积累数据。
+- **AI 回顾**：兼容 OpenAI / Anthropic 网关，按今日 / 周 / 月 / 年 / 自定义日期范围总结；多提示词模板可复制编辑；总结可复制、可修改。
+- **数据自主**：本地 JSON 明文存储（自己的数据自己拿走）；`.ttbak` 与 WebDAV 备份支持 gzip + AES-256-GCM 加密（`TTENC2`）；图片/附件按内容寻址拆分到 `blobs/`，同一文件只传一次，主备份文件保持 KB 级。
+- **可被自动化**：内置 MCP 服务器（stdio），外部 Agent（如 Claude、Codex）可以直接搜索、增删改待办、记录专注、触发 AI 回顾，桌面端实时同步刷新。
+
+Android 版共享全部核心功能，并额外提供桌面小组件（最近待办）与跟随主题的沉浸式系统栏。
 
 ## 界面预览
 
@@ -15,7 +36,7 @@ Windows 桌面待办应用：分组、状态视图、桌面便签、番茄专注
 | ![桌面端编辑详情](docs/images/desktop-detail-edit.png) |
 
 | 手机端（Capacitor） | AI 回顾 |
-| --- | --- |
+| --- |
 | ![手机端主界面](docs/images/mobile-home.png) | ![AI 回顾](docs/images/mobile-ai-review.png) |
 
 ## 开发与构建
@@ -154,7 +175,7 @@ npm run android:run
 | 功能 | 桌面端 | 安卓端 |
 |---|---|---|
 | 待办 / 分组 / 搜索 / 番茄钟 / 详情 | ✅ | ✅ |
-| AI 回顾（周/月/年） | ✅ | ✅ 走 `CapacitorHttp` |
+| AI 回顾（今日/周/月/年/自定义范围、多模板） | ✅ | ✅ 走 `CapacitorHttp` |
 | WebDAV 备份 / 恢复 | ✅ 支持加密 | ⚠️ 仅明文 JSON（加密备份会提示不支持） |
 | 本地数据存储 | `%APPDATA%/tomato-todo/*.json` | Preferences（`CapacitorStorage.*`） |
 | 桌面便签、托盘、全局快捷键 | ✅ | — 无（固定在手机上只标记状态） |
