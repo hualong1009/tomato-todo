@@ -1,6 +1,6 @@
 {
   "name": "tomato-todo",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "番茄待办 - 桌面待办、分组、桌面便签、番茄钟与 AI 回顾",
   "main": "./out/main/index.js",
   "author": "Tomato Todo",
@@ -17,7 +17,8 @@
     "test:e2e": "npm run build && npm run build:web && node tests/e2e/electron-smoke.mjs && node tests/e2e/dropdown-ui.mjs && node tests/e2e/security.e2e.mjs && node tests/e2e/mobile-web.mjs && node tests/e2e/mcp-stdio.mjs",
     "dev:web": "vite -c vite.mobile.config.ts",
     "build:web": "vite build -c vite.mobile.config.ts",
-    "android:sync": "npm run build:web && cap sync android",
+    "version:sync": "node scripts/sync-android-version.mjs",
+    "android:sync": "npm run build:web && npm run version:sync && cap sync android",
     "android:open": "cap open android",
     "android:run": "npm run build:web && cap run android",
     "android:icons": "node scripts/build-android-icons.mjs"

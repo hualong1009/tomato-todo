@@ -93,6 +93,20 @@ npm run mcp
 
 MCP 与桌面应用共享同一数据文件；桌面端通过文件监听自动刷新，外部 Agent 新增/修改待办会实时同步到界面。
 
+## Android 构建与版本号
+
+版本号统一维护在 `package.json` 的 `version`（x.y.z 格式）：
+
+```bash
+npm run version:sync   # 把 package.json 版本同步到 android/app/build.gradle（versionName + versionCode）
+npm run android:sync    # 构建 Web 资源 + 同步版本号 + cap sync android
+```
+
+- `versionName` = `package.json` 的 version（如 `1.2.0`）
+- `versionCode` = major × 10000 + minor × 100 + patch（如 `10200`），保证单调递增可覆盖安装
+- APK 文件名同样带版本号：`tomato-todo-v1.2.0-debug.apk`
+- `android:sync` 已自动跑版本同步，直接改 `package.json` 再构建即可
+
 ## 测试
 
 ```bash

@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
+
+const pkg = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'))
 
 /**
  * 移动端（Capacitor / 浏览器）Web 构建配置。
@@ -11,6 +14,9 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   root: resolve(__dirname, 'src/renderer'),
   base: './',
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version)
+  },
   plugins: [react()],
   resolve: {
     alias: {

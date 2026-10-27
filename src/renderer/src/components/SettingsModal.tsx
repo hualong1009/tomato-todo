@@ -1247,7 +1247,7 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast }: Sett
                 <div className="about-logo">
                   <TomatoIcon size={42} />
                 </div>
-                <h3>番茄待办 1.0.0</h3>
+                <h3>番茄待办 {__APP_VERSION__}</h3>
                 <p className="settings-desc">
                   桌面待办、状态分组、桌面便签、番茄专注、AI 回顾与 MCP 数据接口。
                 </p>
