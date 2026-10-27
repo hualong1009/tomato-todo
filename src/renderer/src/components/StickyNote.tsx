@@ -98,6 +98,7 @@ export function StickyNote({ todoId }: { todoId: string }) {
               className="sticky-tool"
               onClick={() => void window.api.openMainWithTodo(todo.id)}
               title="在主窗口中打开"
+              data-testid="sticky-open-main"
             >
               <ExternalIcon size={15} />
             </button>

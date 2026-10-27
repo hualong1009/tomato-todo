@@ -184,7 +184,10 @@ function loadRenderer(window: BrowserWindow, route = ''): void {
   if (devUrl) {
     window.loadURL(`${devUrl}${route ? `#${route}` : ''}`)
   } else {
-    window.loadFile(join(__dirname, '../renderer/index.html'), route ? { hash: route.slice(1) } : undefined)
+    // loadFile 的 hash 选项会自动加 '#'：必须原样带路由开头的 '/'，
+    // 否则 location.hash 变成 #sticky/xxx（无斜杠），路由匹配失败
+    // 会把整个应用渲染进便签小窗（#7）
+    window.loadFile(join(__dirname, '../renderer/index.html'), route ? { hash: route } : undefined)
   }
 }
 

@@ -15,7 +15,7 @@
     "mcp": "node scripts/run-mcp.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "npm run build && npm run build:web && node tests/e2e/electron-smoke.mjs && node tests/e2e/dropdown-ui.mjs && node tests/e2e/security.e2e.mjs && node tests/e2e/mobile-web.mjs && node tests/e2e/mcp-stdio.mjs",
+    "test:e2e": "npm run build && npm run build:web && node tests/e2e/electron-smoke.mjs && node tests/e2e/sticky-window.mjs && node tests/e2e/dropdown-ui.mjs && node tests/e2e/security.e2e.mjs && node tests/e2e/mobile-web.mjs && node tests/e2e/mcp-stdio.mjs",
     "dev:web": "vite -c vite.mobile.config.ts",
     "build:web": "vite build -c vite.mobile.config.ts",
     "version:sync": "node scripts/sync-android-version.mjs",
