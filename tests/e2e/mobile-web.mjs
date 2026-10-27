@@ -175,6 +175,9 @@ try {
   await page.waitForSelector('[data-testid="setting-theme-dark"]')
   check('隐藏全局快捷键设置', (await page.locator('[data-testid="setting-hotkey-record"]').count()) === 0)
   check('隐藏托盘设置', (await page.locator('[data-testid="setting-close-to-tray"]').count()) === 0)
+  await page.click('[data-testid="settings-tab-webdav"]')
+  check('手机端可填写 WebDAV 解密密码',
+    (await page.locator('[data-testid="setting-webdav-encryption"]').count()) === 1)
 
   // 手机端导出 Markdown：复制到剪贴板
   await page.click('[data-testid="settings-tab-localbackup"]')
