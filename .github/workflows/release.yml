@@ -116,7 +116,7 @@ jobs:
         run: npm run build
 
       - name: 构建 NSIS 安装包
-        run: npx electron-builder --win
+        run: npx electron-builder --win --publish never
         env:
           # CI 上缓存 Electron 构建依赖
           USE_HARD_LINKS: 'false'

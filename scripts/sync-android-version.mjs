@@ -17,14 +17,19 @@ if (!match) {
 
 const versionCode = Number(match[1]) * 10000 + Number(match[2]) * 100 + Number(match[3])
 const gradlePath = new URL('../android/app/build.gradle', import.meta.url)
-let gradle = readFileSync(gradlePath, 'utf-8')
+const gradle = readFileSync(gradlePath, 'utf-8')
 
-const before = gradle
-gradle = gradle.replace(/versionCode \d+\n(\s*)versionName "[^"]+"/, `versionCode ${versionCode}\n$1versionName "${version}"`)
-
-if (gradle === before) {
+const pattern = /versionCode \d+\n(\s*)versionName "[^"]+"/
+if (!pattern.test(gradle)) {
   console.error('android/app/build.gradle 中没有找到 versionCode / versionName，请检查格式')
   process.exit(1)
 }
-writeFileSync(gradlePath, gradle)
+
+const next = gradle.replace(
+  pattern,
+  `versionCode ${versionCode}\n$1versionName "${version}"`
+)
+if (next !== gradle) {
+  writeFileSync(gradlePath, next)
+}
 console.log(`已同步版本：package.json ${version} → Android versionName ${version} / versionCode ${versionCode}`)
