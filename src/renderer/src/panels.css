@@ -1236,6 +1236,10 @@
   flex: 0 0 auto;
 }
 
+.theme-swatch.system {
+  background: linear-gradient(135deg, #070a12 0%, #070a12 50%, #edf1f7 50%, #edf1f7 100%);
+}
+
 .theme-swatch.dark {
   background: linear-gradient(140deg, #0b1020, #1d2740 55%, #ff625c);
 }

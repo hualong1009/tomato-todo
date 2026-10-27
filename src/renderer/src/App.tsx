@@ -36,7 +36,8 @@ import {
   TimerIcon,
   TomatoIcon,
   TrashIcon,
-  XIcon
+  XIcon,
+  SystemIcon
 } from './components/Icons'
 import { PomodoroMini, PomodoroOverlay, type PomodoroState } from './components/PomodoroOverlay'
 import { SettingsModal } from './components/SettingsModal'
@@ -168,10 +169,25 @@ export default function App() {
     }
   }, [])
 
+  // 「跟随系统」主题：监听系统深浅色变化，换算成实际生效的主题
+  const [systemDark, setSystemDark] = useState(
+    () =>
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches
+  )
   useEffect(() => {
-    if (!state) return
-    document.documentElement.dataset.theme = state.settings.general.theme
-  }, [state?.settings.general.theme])
+    if (typeof window.matchMedia !== 'function') return
+    const query = window.matchMedia('(prefers-color-scheme: dark)')
+    const onChange = (event: MediaQueryListEvent) => setSystemDark(event.matches)
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
+  }, [])
+  const themeSetting = state?.settings.general.theme ?? 'system'
+  const effectiveTheme =
+    themeSetting === 'system' ? (systemDark ? 'dark' : 'light') : themeSetting
+  useEffect(() => {
+    document.documentElement.dataset.theme = effectiveTheme
+  }, [effectiveTheme])
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 20000)
@@ -876,14 +892,31 @@ export default function App() {
                       void quickUpdateSettings({
                         general: {
                           ...state.settings.general,
-                          theme: state.settings.general.theme === 'dark' ? 'light' : 'dark'
+                          theme:
+                            state.settings.general.theme === 'dark'
+                              ? 'light'
+                              : state.settings.general.theme === 'light'
+                                ? 'system'
+                                : 'dark'
                         }
                       })
                     }
-                    title="切换主题"
+                    title={
+                      themeSetting === 'dark'
+                        ? '当前深色，点击切换浅色'
+                        : themeSetting === 'light'
+                          ? '当前浅色，点击跟随系统'
+                          : `当前跟随系统（${effectiveTheme === 'dark' ? '深色' : '浅色'}），点击切换深色`
+                    }
                     data-testid="theme-toggle"
                   >
-                    {state.settings.general.theme === 'dark' ? <MoonIcon size={17} /> : <SunIcon size={17} />}
+                    {themeSetting === 'dark' ? (
+                      <MoonIcon size={17} />
+                    ) : themeSetting === 'light' ? (
+                      <SunIcon size={17} />
+                    ) : (
+                      <SystemIcon size={17} />
+                    )}
                   </button>
                   <button className="header-icon-btn" onClick={() => setSettingsOpen(true)} title="设置" data-testid="header-settings">
                     <SettingsIcon size={18} />

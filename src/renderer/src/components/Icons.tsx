@@ -301,6 +301,13 @@ export const SunIcon = (props: IconProps) => (
   </svg>
 )
 
+export const SystemIcon = (props: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <rect x="2.5" y="4" width="19" height="13" rx="2" />
+    <path d="M8.5 21h7M12 17.5V21" />
+  </svg>
+)
+
 export const LockIcon = (props: IconProps) => (
   <svg {...base(props)}>
     <rect x="4.5" y="10.5" width="15" height="9.5" rx="2.5" />

@@ -251,7 +251,12 @@ export function normaliseState(raw: unknown): AppState {
     60,
     Math.max(1, Math.round(Number(settings.pomodoro.breakMinutes) || 5))
   )
-  if (settings.general.theme !== 'light') settings.general.theme = 'dark'
+  if (
+    settings.general.theme !== 'light' &&
+    settings.general.theme !== 'system'
+  ) {
+    settings.general.theme = 'dark'
+  }
   if (typeof settings.general.hotkey !== 'string' || !settings.general.hotkey.trim()) {
     settings.general.hotkey = fallback.settings.general.hotkey
   }

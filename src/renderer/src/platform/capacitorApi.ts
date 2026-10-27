@@ -83,12 +83,36 @@ const themePlugin = Capacitor.isNativePlatform()
   : null
 let lastScheme: string | null = null
 
+function systemPrefersDark(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+
+function effectiveScheme(): 'dark' | 'light' {
+  const theme = state.settings.general.theme
+  if (theme === 'light') return 'light'
+  if (theme === 'dark') return 'dark'
+  return systemPrefersDark() ? 'dark' : 'light'
+}
+
 function syncTheme(): void {
   if (!themePlugin) return
-  const scheme = state.settings.general.theme === 'light' ? 'light' : 'dark'
+  const scheme = effectiveScheme()
   if (scheme === lastScheme) return
   lastScheme = scheme
   void themePlugin.apply({ scheme }).catch(() => undefined)
+}
+
+// 「跟随系统」时，系统深浅色变化要即时同步到系统栏
+if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+  try {
+    const query = window.matchMedia('(prefers-color-scheme: dark)')
+    query.addEventListener('change', () => {
+      if (state.settings.general.theme === 'system') syncTheme()
+    })
+  } catch {
+    /* 旧 WebView 不支持 addEventListener */
+  }
 }
 
 function syncWidget(): void {

@@ -759,6 +759,16 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast }: Sett
                       <span className="theme-swatch light" />
                       <strong>晨光浅色</strong>
                     </button>
+                    <button
+                      className={`theme-card ${draft.general.theme === 'system' ? 'active' : ''}`}
+                      onClick={() =>
+                        setDraft((previous) => ({ ...previous, general: { ...previous.general, theme: 'system' } }))
+                      }
+                      data-testid="setting-theme-system"
+                    >
+                      <span className="theme-swatch system" />
+                      <strong>跟随系统</strong>
+                    </button>
                   </div>
                 </div>
                 {!isMobile && (

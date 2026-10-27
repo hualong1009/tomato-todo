@@ -21,9 +21,12 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  * 系统栏（状态栏 / 手势条）外观：跟随应用主题改为透明沉浸式。
  *
  * targetSdk 35+ 系统强制边到边绘制，窗口颜色会被忽略，所以：
- * 1. 窗口背景色 = 主题背景色（状态栏/导航栏区域露出的就是主题色）
+ * 1. 窗口与内容背景色 = 主题背景色（系统栏区域露出的就是主题色）
  * 2. 内容按系统 insets 留白（applyInsetsPadding），按钮不会被系统栏压住
- * 图标明暗由 Web 层在主题切换时调用 apply 同步。
+ * 3. 关闭状态栏 / 导航栏的强制对比遮罩（否则透明栏上会有一层白色纱罩）
+ *
+ * 注意：插件方法运行在桥接线程，所有窗口操作必须切回主线程，
+ * 否则会抛 CalledFromWrongThreadException 导致应用闪退。
  */
 @CapacitorPlugin(name = "TomatoTheme")
 public class ThemePlugin extends Plugin {
@@ -36,9 +39,9 @@ public class ThemePlugin extends Plugin {
     public void apply(PluginCall call) {
         String scheme = call.getString("scheme", "dark");
         boolean isLight = "light".equals(scheme);
-        Activity activity = getActivity();
+        final Activity activity = getActivity();
         if (activity != null) {
-            applyToWindow(activity, isLight);
+            activity.runOnUiThread(() -> applyToWindow(activity, isLight));
         }
         JSObject ret = new JSObject();
         ret.put("ok", true);
@@ -54,9 +57,17 @@ public class ThemePlugin extends Plugin {
         window.setBackgroundDrawable(new ColorDrawable(isLight ? BG_LIGHT : BG_DARK));
         if (Build.VERSION.SDK_INT >= 29) {
             try {
+                // 关闭透明系统栏上的强制对比白纱（状态栏 + 导航栏），
+                // 否则边缘会显示出一条白边
+                window.setStatusBarContrastEnforced(false);
                 window.setNavigationBarContrastEnforced(false);
             } catch (Exception ignored) {
             }
+        }
+        // 内容视图背景也刷成主题色，保证 insets 留白区域一定是主题色
+        View content = activity.findViewById(android.R.id.content);
+        if (content != null) {
+            content.setBackgroundColor(isLight ? BG_LIGHT : BG_DARK);
         }
         WindowInsetsControllerCompat controller =
             WindowCompat.getInsetsController(window, window.getDecorView());

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_GROUP_ID } from '../src/shared/defaults'
+import { normaliseState } from '../src/shared/normalise'
 import {
   archiveTodo,
   createGroup,
@@ -320,5 +321,15 @@ describe('AI 回顾时间范围（今日 / 自定义）', () => {
     expect(titles).toContain('范围第一天完成')
     expect(titles).toContain('范围最后一天深夜完成')
     expect(titles).not.toContain('范围外完成')
+  })
+})
+
+describe('界面主题（含跟随系统）', () => {
+  it('system 是合法主题，非法值回退深色', () => {
+    const state = makeState()
+    expect(normaliseState({ ...state, settings: { ...state.settings, general: { ...state.settings.general, theme: 'system' } } }).settings.general.theme).toBe('system')
+    expect(normaliseState({ ...state, settings: { ...state.settings, general: { ...state.settings.general, theme: 'dark' } } }).settings.general.theme).toBe('dark')
+    expect(normaliseState({ ...state, settings: { ...state.settings, general: { ...state.settings.general, theme: 'red' } } }).settings.general.theme).toBe('dark')
+    expect(normaliseState({ ...state, settings: { ...state.settings, general: { ...state.settings.general, theme: undefined } } }).settings.general.theme).toBe('dark')
   })
 })

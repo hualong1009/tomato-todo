@@ -99,7 +99,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   },
   general: {
     hotkey: 'CommandOrControl+Shift+Space',
-    theme: 'dark',
+    theme: 'system',
     closeToTray: true
   },
   webdav: {

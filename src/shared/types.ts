@@ -4,7 +4,7 @@ export type Urgency = 'low' | 'medium' | 'high' | 'urgent'
 
 export type TodoStatus = 'not_started' | 'in_progress' | 'completed' | 'overdue'
 
-export type ThemeMode = 'dark' | 'light'
+export type ThemeMode = 'dark' | 'light' | 'system'
 
 export type SummaryRange = 'day' | 'week' | 'month' | 'year' | 'custom'
 
