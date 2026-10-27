@@ -116,7 +116,7 @@
     "deb": {
       "packageName": "tomato-todo",
       "synopsis": "番茄待办：待办清单、番茄钟与 AI 回顾",
-      "artifactName": "tomato-todo_${version}_${arch}.deb"
+      "artifactName": "tomato-todo-${version}-${arch}.deb"
     },
     "rpm": {
       "packageName": "tomato-todo",

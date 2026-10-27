@@ -174,7 +174,8 @@ jobs:
         run: |
           VERSION=${GITHUB_REF_NAME#v}
           mkdir -p dist-linux
-          cp release/tomato-todo-*"${VERSION}"* dist-linux/ 2>/dev/null || true
+          # 通配符放宽到 tomato-todo*，兼容连字符/下划线两种产物命名
+          cp release/tomato-todo*"${VERSION}"* dist-linux/ 2>/dev/null || true
           ls -la dist-linux/
 
       - name: 上传到 GitHub Release
