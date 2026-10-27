@@ -1,9 +1,12 @@
-import { forwardRef, useEffect, useState } from 'react'
+import { forwardRef, useEffect, useRef, useState } from 'react'
 import { URGENCY_META } from '@shared/defaults'
-import type { AddTodoInput, Group, Urgency } from '@shared/types'
+import { formatBytes } from '@shared/attachments'
+import type { AddTodoInput, Attachment, Group, Urgency } from '@shared/types'
 import { fromDatetimeLocal, toDatetimeLocal } from '../utils/format'
-import { PlusIcon } from './Icons'
+import { fileToAttachment } from '../utils/attachmentFile'
 import { Dropdown } from './Dropdown'
+import { PaperclipIcon, PlusIcon, XIcon } from './Icons'
+import { RichContentEditor } from './RichContentEditor'
 
 interface TodoComposerProps {
   groups: Group[]
@@ -17,14 +20,33 @@ export const TodoComposer = forwardRef<HTMLInputElement, TodoComposerProps>(func
 ) {
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [attachError, setAttachError] = useState<string | null>(null)
+  const [attachBusy, setAttachBusy] = useState(false)
   const [groupId, setGroupId] = useState(defaultGroupId)
   const [urgency, setUrgency] = useState<Urgency>('medium')
   const [expected, setExpected] = useState('')
   const [busy, setBusy] = useState(false)
+  const attachInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     if (groups.some((group) => group.id === defaultGroupId)) setGroupId(defaultGroupId)
   }, [defaultGroupId, groups])
+
+  const addAttachments = async (files: File[]) => {
+    if (files.length === 0) return
+    setAttachBusy(true)
+    setAttachError(null)
+    try {
+      const added: Attachment[] = []
+      for (const file of files) added.push(await fileToAttachment(file))
+      setAttachments((current) => [...current, ...added])
+    } catch (error) {
+      setAttachError(error instanceof Error ? error.message : '添加附件失败')
+    } finally {
+      setAttachBusy(false)
+    }
+  }
 
   const submit = async () => {
     if (!title.trim() || busy) return
@@ -35,11 +57,14 @@ export const TodoComposer = forwardRef<HTMLInputElement, TodoComposerProps>(func
         content,
         groupId,
         urgency,
-        expectedAt: fromDatetimeLocal(expected)
+        expectedAt: fromDatetimeLocal(expected),
+        attachments: attachments.length > 0 ? attachments : undefined
       })
       if (ok) {
         setTitle('')
         setContent('')
+        setAttachments([])
+        setAttachError(null)
         setExpected('')
       }
     } finally {
@@ -77,20 +102,40 @@ export const TodoComposer = forwardRef<HTMLInputElement, TodoComposerProps>(func
             添加
           </button>
         </div>
-        <textarea
-          className="composer-content"
-          placeholder="补充详细内容（可选）"
+        <RichContentEditor
+          compact
           value={content}
-          rows={2}
-          onChange={(event) => setContent(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-              event.preventDefault()
-              void submit()
-            }
-          }}
+          placeholder="补充详细内容（可选，支持 Markdown，可直接粘贴或拖入图片）"
+          onChange={setContent}
+          onRequestSave={() => void submit()}
+          onAttachFiles={(files) => void addAttachments(files)}
           data-testid="composer-content"
         />
+        {attachments.length > 0 && (
+          <ul className="attachment-list composer-attachments" data-testid="composer-attachments">
+            {attachments.map((attachment) => (
+              <li className="attachment-item" key={attachment.id}>
+                <PaperclipIcon size={13} />
+                <span className="attachment-name" title={attachment.name}>
+                  {attachment.name}
+                </span>
+                <span className="attachment-size">{formatBytes(attachment.size)}</span>
+                <button
+                  type="button"
+                  className="icon-btn tiny danger"
+                  title="移除附件"
+                  onClick={() =>
+                    setAttachments((current) => current.filter((item) => item.id !== attachment.id))
+                  }
+                  data-testid={`composer-attachment-remove-${attachment.id}`}
+                >
+                  <XIcon size={11} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {attachError && <span className="composer-attach-error">{attachError}</span>}
         <div className="composer-meta">
           <label className="mini-field">
             <span>分组</span>

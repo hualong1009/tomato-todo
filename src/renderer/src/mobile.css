@@ -339,6 +339,12 @@
   font-size: 13.5px;
 }
 
+/* 新建待办弹层里的紧凑富文本编辑器 */
+.sheet-composer .rich-editor.compact .composer-content {
+  min-height: 96px;
+  font-size: 13.5px;
+}
+
 /* ---------- 长按操作面板 ---------- */
 .action-sheet {
   max-height: 80vh;

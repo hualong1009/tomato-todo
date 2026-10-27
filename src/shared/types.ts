@@ -166,6 +166,7 @@ export interface AddTodoInput {
   groupId?: string
   urgency?: Urgency
   expectedAt?: string | null
+  attachments?: Attachment[]
 }
 
 export interface UpdateTodoPatch {
