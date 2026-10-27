@@ -42,6 +42,7 @@ public class ThemePlugin extends Plugin {
     private static volatile boolean webHandlesInsets = false;
     private static int lastTop = 0;
     private static int lastBottom = 0;
+    private static int lastImeBottom = 0;
     private static int lastLeft = 0;
     private static int lastRight = 0;
 
@@ -90,6 +91,7 @@ public class ThemePlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("top", toCssPx(lastTop));
         ret.put("bottom", toCssPx(lastBottom));
+        ret.put("ime", toCssPx(lastImeBottom));
         ret.put("left", toCssPx(lastLeft));
         ret.put("right", toCssPx(lastRight));
         call.resolve(ret);
@@ -99,6 +101,7 @@ public class ThemePlugin extends Plugin {
         JSObject data = new JSObject();
         data.put("top", toCssPx(lastTop));
         data.put("bottom", toCssPx(lastBottom));
+        data.put("ime", toCssPx(lastImeBottom));
         data.put("left", toCssPx(lastLeft));
         data.put("right", toCssPx(lastRight));
         notifyListeners("safeArea", data);
@@ -155,10 +158,14 @@ public class ThemePlugin extends Plugin {
                 lastTop = bars.top;
                 lastLeft = bars.left;
                 lastRight = bars.right;
-                // 键盘弹出时内容要整体抬到键盘上方
-                lastBottom = Math.max(bars.bottom, ime.bottom);
+                // 系统栏与键盘是两种不同的 inset：不能把键盘高度作为 CSS
+                // --safe-bottom，否则底部面板的滚动区会多出整块键盘高度，
+                // 表单被推到屏幕外。IME 单独交给 Web 层定位浮层。
+                lastBottom = bars.bottom;
+                lastImeBottom = insets.isVisible(WindowInsetsCompat.Type.ime()) ? ime.bottom : 0;
                 if (!webHandlesInsets) {
-                    view.setPadding(lastLeft, lastTop, lastRight, lastBottom);
+                    view.setPadding(lastLeft, lastTop, lastRight,
+                        Math.max(lastBottom, lastImeBottom));
                 }
                 ThemePlugin plugin = instance;
                 if (plugin != null && webHandlesInsets) {
