@@ -1,6 +1,6 @@
 {
   "name": "tomato-todo",
-  "version": "1.2.6",
+  "version": "1.2.7",
   "desktopName": "tomato-todo",
   "description": "番茄待办 - 桌面待办、分组、桌面便签、番茄钟与 AI 回顾",
   "main": "./out/main/index.js",
