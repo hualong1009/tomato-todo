@@ -9,6 +9,7 @@ import {
   ItalicIcon,
   LinkIcon,
   ListIcon,
+  PaperclipIcon,
   QuoteIcon,
   StrikeIcon,
   TrashIcon
@@ -19,10 +20,14 @@ export interface RichContentEditorProps {
   disabled?: boolean
   placeholder?: string
   onChange: (value: string) => void
-  /** Ctrl+S 触发（由外层负责保存） */
+  /** Ctrl+S / Ctrl+Enter 触发（由外层负责保存） */
   onRequestSave?: () => void
   /** Esc 触发（由外层负责取消） */
   onRequestCancel?: () => void
+  /** 紧凑模式：仅保留插入图片/附件入口，隐藏格式工具与视图切换 */
+  compact?: boolean
+  /** 紧凑模式下的附件入口：文件交给外层处理（附件不写入正文） */
+  onAttachFiles?: (files: File[]) => void
   /** 测试用属性透传 */
   'data-testid'?: string
 }
@@ -78,6 +83,8 @@ export function RichContentEditor({
   onChange,
   onRequestSave,
   onRequestCancel,
+  compact = false,
+  onAttachFiles,
   'data-testid': testId = 'detail-content'
 }: RichContentEditorProps) {
   const [mode, setMode] = useState<Mode>('edit')
@@ -85,6 +92,7 @@ export function RichContentEditor({
   const [busy, setBusy] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
+  const attachRef = useRef<HTMLInputElement | null>(null)
   const pendingSelection = useRef<{ start: number; end: number } | null>(null)
 
   const hasContent = value.trim().length > 0
@@ -190,7 +198,10 @@ export function RichContentEditor({
     }
     if (!(event.ctrlKey || event.metaKey)) return
     const key = event.key.toLowerCase()
-    if (key === 's' && onRequestSave) {
+    if (event.key === 'Enter' && onRequestSave) {
+      event.preventDefault()
+      onRequestSave()
+    } else if (key === 's' && onRequestSave) {
       event.preventDefault()
       onRequestSave()
     } else if (key === 'b') {
@@ -208,25 +219,27 @@ export function RichContentEditor({
   const preview = useMemo(() => value, [value])
 
   return (
-    <div className={`rich-editor ${disabled ? 'disabled' : ''}`}>
+    <div className={`rich-editor ${compact ? 'compact' : ''} ${disabled ? 'disabled' : ''}`}>
       <div className="rich-toolbar">
         <div className="rich-tools">
-          {TOOLS.map((tool) => {
-            const Icon = tool.icon
-            return (
-              <button
-                key={tool.id}
-                type="button"
-                className="rich-tool"
-                title={tool.label}
-                disabled={disabled || busy}
-                onClick={() => runTool(tool.id)}
-                data-testid={`rich-tool-${tool.id}`}
-              >
-                <Icon size={15} />
-              </button>
-            )
-          })}
+          {!compact &&
+            TOOLS.map((tool) => {
+              const Icon = tool.icon
+              return (
+                <button
+                  key={tool.id}
+                  type="button"
+                  className="rich-tool"
+                  title={tool.label}
+                  disabled={disabled || busy}
+                  onClick={() => runTool(tool.id)}
+                  data-testid={`rich-tool-${tool.id}`}
+                >
+                  <Icon size={15} />
+                </button>
+              )
+            })}
+          {compact && <span className="rich-hint static">补充内容（支持 Markdown）</span>}
           <span className="rich-sep" />
           <button
             type="button"
@@ -238,6 +251,18 @@ export function RichContentEditor({
           >
             <ImageIcon size={15} />
           </button>
+          {compact && onAttachFiles && (
+            <button
+              type="button"
+              className="rich-tool"
+              title="上传附件（≤10MB/个）"
+              disabled={disabled || busy}
+              onClick={() => attachRef.current?.click()}
+              data-testid="rich-tool-attach"
+            >
+              <PaperclipIcon size={15} />
+            </button>
+          )}
           {hasContent && !disabled && (
             <button
               type="button"
@@ -250,33 +275,35 @@ export function RichContentEditor({
             </button>
           )}
         </div>
-        <div className="rich-modes">
-          <button
-            type="button"
-            className={`rich-mode ${mode === 'edit' ? 'active' : ''}`}
-            onClick={() => setMode('edit')}
-            data-testid="rich-mode-edit"
-          >
-            编辑
-          </button>
-          <button
-            type="button"
-            className={`rich-mode ${mode === 'split' ? 'active' : ''}`}
-            onClick={() => setMode('split')}
-            data-testid="rich-mode-split"
-          >
-            分栏
-          </button>
-          <button
-            type="button"
-            className={`rich-mode ${mode === 'preview' ? 'active' : ''}`}
-            onClick={() => setMode('preview')}
-            data-testid="rich-mode-preview"
-          >
-            <EyeIcon size={13} />
-            预览
-          </button>
-        </div>
+        {compact ? null : (
+          <div className="rich-modes">
+            <button
+              type="button"
+              className={`rich-mode ${mode === 'edit' ? 'active' : ''}`}
+              onClick={() => setMode('edit')}
+              data-testid="rich-mode-edit"
+            >
+              编辑
+            </button>
+            <button
+              type="button"
+              className={`rich-mode ${mode === 'split' ? 'active' : ''}`}
+              onClick={() => setMode('split')}
+              data-testid="rich-mode-split"
+            >
+              分栏
+            </button>
+            <button
+              type="button"
+              className={`rich-mode ${mode === 'preview' ? 'active' : ''}`}
+              onClick={() => setMode('preview')}
+              data-testid="rich-mode-preview"
+            >
+              <EyeIcon size={13} />
+              预览
+            </button>
+          </div>
+        )}
       </div>
 
       <div className={`rich-body mode-${mode}`}>
@@ -322,6 +349,20 @@ export function RichContentEditor({
         onChange={(event) => void insertImage(event.target.files)}
         data-testid="rich-image-input"
       />
+      {compact && onAttachFiles && (
+        <input
+          ref={attachRef}
+          type="file"
+          multiple
+          hidden
+          onChange={(event) => {
+            const files = event.target.files ? Array.from(event.target.files) : []
+            if (files.length > 0) onAttachFiles(files)
+            if (attachRef.current) attachRef.current.value = ''
+          }}
+          data-testid="rich-attach-input"
+        />
+      )}
       {busy && <span className="rich-hint">正在处理图片…</span>}
       {error && <span className="rich-hint error">{error}</span>}
     </div>

@@ -1042,6 +1042,16 @@ select {
   color: var(--muted-2);
 }
 
+/* 新建待办的补充内容已换成富文本编辑器（RichContentEditor compact），
+   旧 .composer-content 是给裸 textarea 的缩进布局，这里复位 */
+.rich-editor .composer-content {
+  width: 100%;
+  margin-left: 0;
+  min-height: 0;
+  padding: 8px 10px;
+  border: 0;
+}
+
 .composer-meta {
   display: flex;
   align-items: center;

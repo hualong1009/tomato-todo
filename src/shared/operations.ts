@@ -158,7 +158,7 @@ export function createTodo(state: AppState, input: AddTodoInput): Todo {
     focusLog: [],
     stickyColor: DEFAULT_STICKY_COLOR,
     stickyOpacity: DEFAULT_STICKY_OPACITY,
-    attachments: []
+    attachments: input.attachments ? input.attachments.map((attachment) => ({ ...attachment })) : []
   }
   state.todos.unshift(todo)
   return todo

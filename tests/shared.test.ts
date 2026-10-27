@@ -333,3 +333,25 @@ describe('界面主题（含跟随系统）', () => {
     expect(normaliseState({ ...state, settings: { ...state.settings, general: { ...state.settings.general, theme: undefined } } }).settings.general.theme).toBe('dark')
   })
 })
+
+describe('新建待办携带附件', () => {
+  it('AddTodoInput 附件会写入新待办', () => {
+    const state = makeState()
+    const attachment = {
+      id: 'att-1',
+      name: '文件.zip',
+      mime: 'application/zip',
+      size: 10,
+      data: 'data:application/zip;base64,QUJD',
+      createdAt: '2026-01-01T00:00:00.000Z'
+    }
+    const todo = createTodo(state, { title: '带附件', attachments: [attachment] })
+    expect(todo.attachments).toHaveLength(1)
+    expect(todo.attachments[0]?.name).toBe('文件.zip')
+    // 附件是副本，外部修改不影响待办
+    attachment.name = '改名'
+    expect(todo.attachments[0]?.name).toBe('文件.zip')
+    // 不传附件时为空数组
+    expect(createTodo(makeState(), { title: '无附件' }).attachments).toEqual([])
+  })
+})
