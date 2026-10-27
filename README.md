@@ -159,6 +159,10 @@ GitHub Actions 自动构建（测试、Android / Windows 发布流水线）见 [
 
 应用图标基于 Twemoji Tomato（CC-BY 4.0）重新设计，源文件位于 `build/icon.svg`，生成 `icon.png` 与 `icon.ico`。
 
+## 许可证
+
+项目代码采用 [MIT License](LICENSE)。基于 Twemoji 改编的图标遵循其原有的 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) 许可。
+
 ## 安卓版（Capacitor）
 
 桌面版与安卓版共用同一份 React 渲染层和 `src/shared` 业务逻辑，区别只在数据层：
