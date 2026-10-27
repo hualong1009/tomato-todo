@@ -1,5 +1,6 @@
 package app.tomato.todo;
 
+import android.content.res.Configuration;
 import android.os.Bundle;
 import com.getcapacitor.BridgeActivity;
 
@@ -12,9 +13,12 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(WebDAVBinaryPlugin.class);
         registerPlugin(ExternalPlugin.class);
         super.onCreate(savedInstanceState);
-        // 默认按深色主题处理系统栏；Web 层加载后会按用户主题再次调用 TomatoTheme.apply。
+        // 首次安装还没有持久化设置，默认主题跟随系统；启动时先应用系统配色，
+        // Web 层就绪后再按用户选中的主题调用 TomatoTheme.apply。
         // 系统栏 insets 留白必须在原生侧做（Android WebView 的 safe-area-inset 恒为 0）。
-        ThemePlugin.applyToWindow(this, false);
+        boolean isLight = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
+            != Configuration.UI_MODE_NIGHT_YES;
+        ThemePlugin.applyToWindow(this, isLight);
         ThemePlugin.applyInsetsPadding(this);
     }
 }
