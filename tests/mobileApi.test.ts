@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { encryptBackup } from '../src/main/backupCrypto'
 
 /**
  * Web / Capacitor 适配层测试。
@@ -51,6 +52,11 @@ async function freshApi() {
 
 function respond(data: unknown, status = 200) {
   h.request.mockResolvedValueOnce({ status, data, headers: {} })
+}
+
+/** Android CapacitorHttp 的 arraybuffer 响应通过桥接以 base64 字符串返回。 */
+function respondBytes(data: Uint8Array, status = 200) {
+  respond(Buffer.from(data).toString('base64'), status)
 }
 
 beforeEach(() => {
@@ -183,16 +189,18 @@ describe('Web 适配层：AI 与 WebDAV', () => {
     expect(call.data).not.toContain('sk-secret')
   })
 
-  it('远端是加密备份时给出明确提示', async () => {
+  it('未填写加密密码时提示设置密码，并保留本机数据', async () => {
     const api = await freshApi()
     const base = (await api.getState()).settings
+    await api.addTodo({ title: '本机任务' })
     await api.updateSettings({
       webdav: { ...base.webdav, url: 'https://dav.test/remote/', remotePath: 'data.json' }
     })
-    respond('TTENC1xxxxxxxx', 200)
+    respondBytes(encryptBackup('{"groups":[],"todos":[]}', 'pass'))
     const result = await api.restoreWebDAV()
     expect(result.ok).toBe(false)
-    expect(result.message).toContain('加密备份')
+    expect(result.message).toContain('加密密码')
+    expect((await api.getState()).todos[0].title).toBe('本机任务')
   })
 
   it('恢复备份时替换待办但保留本机设置', async () => {
@@ -203,7 +211,7 @@ describe('Web 适配层：AI 与 WebDAV', () => {
       webdav: { ...base.webdav, url: 'https://dav.test/remote/', remotePath: 'data.json' }
     })
     respond(
-      JSON.stringify({
+      {
         version: 1,
         app: 'tomato-todo',
         savedAt: '2026-01-01T00:00:00.000Z',
@@ -227,7 +235,7 @@ describe('Web 适配层：AI 与 WebDAV', () => {
             focusLog: []
           }
         ]
-      }),
+      },
       200
     )
     const result = await api.restoreWebDAV()
@@ -243,10 +251,89 @@ describe('Web 适配层：AI 与 WebDAV', () => {
     await api.updateSettings({
       webdav: { ...base.webdav, url: 'https://dav.test/remote/', remotePath: 'data.json' }
     })
-    respond('<html>not found</html>', 200)
+    respondBytes(new TextEncoder().encode('<html>not found</html>'))
     const result = await api.restoreWebDAV()
     expect(result.ok).toBe(false)
     expect(result.message).toContain('不是有效的待办数据')
+  })
+
+  it('恢复桌面端 TTENC2 主文件和加密 blobs，同时保留本机设置', async () => {
+    const api = await freshApi()
+    const initial = await api.addTodo({ title: '旧本机任务' })
+    const settings = initial.settings
+    const imageName = 'aaaaaaaaaaaaaaaa.webp'
+    const attachmentName = 'bbbbbbbbbbbbbbbb.bin'
+    const imageData = 'data:image/webp;base64,QUJD'
+    const attachmentData = 'data:application/octet-stream;base64,REVG'
+    const todo = {
+      ...initial.todos[0],
+      id: 'from-desktop',
+      title: '跨设备的加密任务',
+      content: `图片 ![示例](blob:${imageName})`,
+      attachments: [{
+        id: 'attachment-1', name: '资料.bin', mime: 'application/octet-stream',
+        size: 3, data: `blob:${attachmentName}`, createdAt: new Date().toISOString()
+      }]
+    }
+    await api.updateSettings({
+      ai: { ...settings.ai, apiKey: 'sk-local-only' },
+      webdav: {
+        ...settings.webdav,
+        url: 'https://dav.test/remote/', remotePath: 'tomato-todo/data.json',
+        encryptionPassword: '🍅 测试密码'
+      }
+    })
+    respondBytes(encryptBackup(JSON.stringify({
+      version: 2, app: 'tomato-todo', savedAt: '2026-01-01T00:00:00.000Z',
+      groups: initial.groups, todos: [todo], assets: [{ name: imageName }, { name: attachmentName }]
+    }), '🍅 测试密码'))
+    respondBytes(encryptBackup(imageData, '🍅 测试密码'))
+    respondBytes(encryptBackup(attachmentData, '🍅 测试密码'))
+    const result = await api.restoreWebDAV()
+    expect(result.ok).toBe(true)
+    const restored = await api.getState()
+    expect(restored.todos).toHaveLength(1)
+    expect(restored.todos[0].title).toBe('跨设备的加密任务')
+    expect(restored.todos[0].content).toContain(`![示例](${imageData})`)
+    expect(restored.todos[0].attachments[0].data).toBe(attachmentData)
+    expect(restored.settings.ai.apiKey).toBe('sk-local-only')
+    expect(restored.settings.webdav.encryptionPassword).toBe('🍅 测试密码')
+    expect(h.request.mock.calls.map(([call]) => call.url)).toEqual([
+      'https://dav.test/remote/tomato-todo/data.json',
+      `https://dav.test/remote/tomato-todo/blobs/${imageName}`,
+      `https://dav.test/remote/tomato-todo/blobs/${attachmentName}`
+    ])
+    expect(h.request.mock.calls.every(([call]) => call.responseType === 'arraybuffer')).toBe(true)
+  })
+
+  it('密码错误或外置加密资源损坏时不会覆盖本机待办', async () => {
+    const api = await freshApi()
+    const original = await api.addTodo({ title: '本机任务不应丢失' })
+    await api.updateSettings({ webdav: {
+      ...original.settings.webdav, url: 'https://dav.test/remote/',
+      remotePath: 'data.json', encryptionPassword: '错误密码'
+    } })
+    const encrypted = encryptBackup(JSON.stringify({
+      app: 'tomato-todo', groups: original.groups, todos: []
+    }), '正确密码')
+    respondBytes(encrypted)
+    const wrongPassword = await api.restoreWebDAV()
+    expect(wrongPassword.ok).toBe(false)
+    expect(wrongPassword.message).toContain('密码不正确')
+    expect((await api.getState()).todos[0].title).toBe('本机任务不应丢失')
+
+    const settings = (await api.getState()).settings.webdav
+    await api.updateSettings({ webdav: { ...settings, encryptionPassword: '正确密码' } })
+    const blob = 'cccccccccccccccc.webp'
+    respondBytes(encryptBackup(JSON.stringify({
+      app: 'tomato-todo', groups: original.groups,
+      todos: [{ ...original.todos[0], content: `![图](blob:${blob})` }]
+    }), '正确密码'))
+    respondBytes(encryptBackup('data:image/webp;base64,QUJD', '另一密码'))
+    const brokenBlob = await api.restoreWebDAV()
+    expect(brokenBlob.ok).toBe(false)
+    expect(brokenBlob.message).toContain('密码不正确')
+    expect((await api.getState()).todos[0].content).toBe('')
   })
 
   it('设置加密密码时拒绝上传（手机端不支持）', async () => {
@@ -262,7 +349,7 @@ describe('Web 适配层：AI 与 WebDAV', () => {
     })
     const result = await api.uploadWebDAV()
     expect(result.ok).toBe(false)
-    expect(result.message).toContain('暂不支持加密备份')
+    expect(result.message).toContain('暂不支持加密上传')
   })
 })
 

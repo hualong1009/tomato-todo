@@ -879,7 +879,6 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast }: Sett
                     />
                   </label>
                 </div>
-                {!isMobile && (
                 <label className="field">
                   <span>备份加密密码（可选）</span>
                   <div className="input-with-action">
@@ -900,15 +899,11 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast }: Sett
                     </button>
                   </div>
                   <small>
-                    非空时上传前用 AES-256-GCM 加密备份、从远端恢复时自动解密；加密密码只保存在本机，不会上传。
+                    {isMobile
+                      ? '用于恢复桌面端加密备份（含图片/附件）；手机端暂不支持加密上传，设置密码后无法在手机端上传。密码只保存在本机。'
+                      : '非空时上传前用 AES-256-GCM 加密备份、从远端恢复时自动解密；加密密码只保存在本机，不会上传。'}
                   </small>
                 </label>
-                )}
-                {isMobile && (
-                  <p className="settings-desc">
-                    手机端暂不支持加密备份：如需跨设备同步，请在桌面端把加密密码留空，或只在桌面端使用加密备份。
-                  </p>
-                )}
                 {!isMobile && (
                   <label className="toggle-row compact">
                     <input

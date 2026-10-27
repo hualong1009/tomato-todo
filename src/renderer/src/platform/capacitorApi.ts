@@ -10,6 +10,7 @@ import { Preferences } from '@capacitor/preferences'
 import type { TomatoAPI } from '../../../shared/api'
 import { callAIChat, listAIModels, testAIConnection } from '../../../shared/aiClient'
 import { createRemotePayload, parseRemotePayload } from '../../../shared/backup'
+import { browserBackupFormatVersion, decryptBrowserBackup } from '../../../shared/browserBackupCrypto'
 import { createDefaultState, normaliseState } from '../../../shared/normalise'
 import {
   archiveTodo,
@@ -291,7 +292,7 @@ const request: typeof fetch = Capacitor.isNativePlatform()
   : ((input, init) => window.fetch(input as RequestInfo, init))
 
 /* ------------------------------------------------------------------ */
-/* WebDAV（手机端简化版：仅上传/下载明文 JSON 备份）                        */
+/* WebDAV（手机端上传明文 JSON；恢复支持明文与 TTENC1/TTENC2 加密备份）     */
 /* ------------------------------------------------------------------ */
 
 function remoteFileUrl(settings: WebDAVSettings): string {
@@ -305,6 +306,46 @@ function remoteFileUrl(settings: WebDAVSettings): string {
 function authHeaders(settings: WebDAVSettings): Record<string, string> {
   if (!settings.username && !settings.password) return {}
   return { Authorization: `Basic ${btoa(`${settings.username}:${settings.password}`)}` }
+}
+
+/** CapacitorHttp 的 arraybuffer 响应在 Android 上是 base64 字符串；
+ * Content-Type: application/json 时原生插件会直接解析成对象。不要把加密
+ * 字节按 UTF-8 读取，否则 GCM 校验必定失败。 */
+async function downloadWebDAVBytes(url: string, headers: Record<string, string>): Promise<{
+  status: number
+  bytes: Uint8Array
+}> {
+  if (Capacitor.isNativePlatform()) {
+    const response = await CapacitorHttp.request({
+      url,
+      method: 'GET',
+      headers,
+      responseType: 'arraybuffer',
+      connectTimeout: 20000,
+      readTimeout: 180000
+    })
+    if (response.status < 200 || response.status >= 300) {
+      return { status: response.status, bytes: new Uint8Array() }
+    }
+    if (typeof response.data === 'string') {
+      const binary = atob(response.data)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+      return { status: response.status, bytes }
+    }
+    return { status: response.status, bytes: new TextEncoder().encode(JSON.stringify(response.data)) }
+  }
+  const response = await request(url, { method: 'GET', headers })
+  return {
+    status: response.status,
+    bytes: response.ok ? new Uint8Array(await response.arrayBuffer()) : new Uint8Array()
+  }
+}
+
+async function decodeWebDAVBytes(bytes: Uint8Array, password: string): Promise<string> {
+  return browserBackupFormatVersion(bytes)
+    ? decryptBrowserBackup(bytes, password)
+    : new TextDecoder().decode(bytes)
 }
 
 async function testWebDAV(settings: WebDAVSettings): Promise<WebDAVTestResult> {
@@ -333,7 +374,7 @@ async function uploadWebDAV(): Promise<WebDAVSyncResult> {
   const settings = state.settings.webdav
   if (!settings.url.trim()) return { ok: false, message: '请先在设置中配置 WebDAV' }
   if (settings.encryptionPassword.trim()) {
-    return { ok: false, message: '手机端暂不支持加密备份，请先清空加密密码' }
+    return { ok: false, message: '手机端暂不支持加密上传；请在桌面端上传，或清空加密密码后仅上传明文' }
   }
   try {
     const url = remoteFileUrl(settings)
@@ -365,36 +406,38 @@ async function restoreWebDAV(): Promise<WebDAVSyncResult> {
   if (!settings.url.trim()) return { ok: false, message: '请先在设置中配置 WebDAV' }
   try {
     const url = remoteFileUrl(settings)
-    const response = await request(url, { method: 'GET', headers: authHeaders(settings) })
+    const response = await downloadWebDAVBytes(url, authHeaders(settings))
     if (response.status === 404) return { ok: false, message: '远端没有找到备份文件' }
-    if (!response.ok) return { ok: false, message: `下载失败：HTTP ${response.status}` }
-    const text = await response.text()
-    if (looksEncrypted(text)) {
-      return { ok: false, message: '远端是加密备份，手机端暂不支持恢复加密备份' }
+    if (response.status < 200 || response.status >= 300) {
+      return { ok: false, message: `下载失败：HTTP ${response.status}` }
     }
+    const text = await decodeWebDAVBytes(response.bytes, settings.encryptionPassword)
     const payload = parseRemotePayload(text)
     if (!payload) return { ok: false, message: '远端文件不是有效的待办数据' }
     let todos = payload.todos
     let assetsNote = ''
     const refs = collectBlobRefs(todos)
     if (refs.length > 0) {
-      // 电脑端把图片/附件外置成 blobs/，手机端恢复时按需拉回归一化
-      const base = url.replace(/[^/]*$/, '')
+      // 桌面端可能把图片/附件外置成 blobs/（加密时每个 blob 也是 TTENC2）。
+      const base = new URL('blobs/', url).toString()
       const cache = new Map<string, string | null>()
       let missing = 0
       for (const name of refs) {
+        let blobResponse: Awaited<ReturnType<typeof downloadWebDAVBytes>>
         try {
-          const blobResponse = await request(`${base}blobs/${name}`, { headers: authHeaders(settings) })
-          if (!blobResponse.ok) {
-            cache.set(name, null)
-            missing += 1
-            continue
-          }
-          cache.set(name, await blobResponse.text())
+          blobResponse = await downloadWebDAVBytes(`${base}${name}`, authHeaders(settings))
         } catch {
           cache.set(name, null)
           missing += 1
+          continue
         }
+        if (blobResponse.status < 200 || blobResponse.status >= 300) {
+          cache.set(name, null)
+          missing += 1
+          continue
+        }
+        // 解密失败时中止整个恢复，不导入含损坏/未解密 blob 引用的半成品。
+        cache.set(name, await decodeWebDAVBytes(blobResponse.bytes, settings.encryptionPassword))
       }
       const resolve = (name: string): string | null => cache.get(name) ?? null
       todos = todos.map((todo) => ({
