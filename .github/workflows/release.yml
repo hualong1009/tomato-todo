@@ -126,8 +126,11 @@ jobs:
         run: |
           VERSION=${GITHUB_REF_NAME#v}
           mkdir -p dist-win
-          cp release/*Setup.exe "dist-win/番茄待办-v${VERSION}-setup.exe" 2>/dev/null || true
-          cp release/*.exe dist-win/ 2>/dev/null || true
+          # GitHub 会规范化资产文件名（中文/空格会被改写），统一改成 ASCII 名
+          for f in release/*.exe; do
+            [ -e "$f" ] || continue
+            cp "$f" "dist-win/tomato-todo-setup-${VERSION}.exe"
+          done
           ls -la dist-win/
 
       - name: 上传到 GitHub Release
