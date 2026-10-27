@@ -1,4 +1,4 @@
-> 本文件说明本项目在 GitHub Actions 上的自动构建方式。
+> 本文件说明本项目在 GitHub Actions 上的 CI / 发布配置与使用方式。
 >
 > - `.github/workflows/ci.yml`：每次 push / PR 跑类型检查与全部测试
 > - `.github/workflows/release.yml`：打 `v*` 标签时构建签名 APK + Windows NSIS 安装包并上传到 Release

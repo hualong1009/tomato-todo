@@ -149,6 +149,8 @@ npm run test:e2e  # 构建后跑桌面端 Electron + 移动端 Web 的 Playwrigh
 E2E 覆盖：桌面端新建/完成/详情/番茄钟/右键菜单/归档/设置/AI/主题/搜索、下拉组件、
 安全锁定与托盘、MCP stdio，以及移动端布局（抽屉侧栏、全屏详情、设置裁剪、本地持久化）。
 
+GitHub Actions 自动构建（测试、Android / Windows 发布流水线）见 [docs/ci.md](docs/ci.md)。
+
 ## 图标
 
 应用图标基于 Twemoji Tomato（CC-BY 4.0）重新设计，源文件位于 `build/icon.svg`，生成 `icon.png` 与 `icon.ico`。
