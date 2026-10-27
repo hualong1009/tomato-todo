@@ -6,7 +6,13 @@ export type TodoStatus = 'not_started' | 'in_progress' | 'completed' | 'overdue'
 
 export type ThemeMode = 'dark' | 'light'
 
-export type SummaryRange = 'week' | 'month' | 'year'
+export type SummaryRange = 'day' | 'week' | 'month' | 'year' | 'custom'
+
+/** 自定义日期范围（YYYY-MM-DD），仅 range === 'custom' 时使用 */
+export interface SummaryDates {
+  start: string
+  end: string
+}
 
 export interface WindowBounds {
   x: number

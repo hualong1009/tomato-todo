@@ -640,6 +640,52 @@
   color: var(--ink);
 }
 
+.ai-custom-range {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin: 0 22px 13px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+
+.ai-custom-range label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.ai-custom-range label > span {
+  font-size: 10.5px;
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.ai-custom-range input {
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--panel-solid);
+  color: var(--ink);
+  font-size: 12.5px;
+}
+
+.ai-custom-range input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.ai-custom-sep {
+  padding-bottom: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .range-tabs button.active {
   color: var(--ink);
   background: var(--panel-solid);

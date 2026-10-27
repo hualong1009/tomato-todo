@@ -14,7 +14,7 @@ import {
   updateGroup,
   updateTodo
 } from '../src/shared/operations'
-import { buildSummaryContext } from '../src/shared/summary'
+import { buildSummaryContext, getRangeBounds } from '../src/shared/summary'
 import { getTodoStatus, isOverdue, taskMatchesStatus } from '../src/shared/todoUtils'
 import type { AddTodoInput, Todo } from '../src/shared/types'
 import { makeState } from './helpers'
@@ -238,5 +238,87 @@ describe('AI 回顾上下文', () => {
     expect(context.todosMarkdown).not.toContain('\\n')
     expect(context.urgencyStats).toContain('紧急 1')
     expect(context.relevantTodos[0].id).toBe(overdue.id)
+  })
+})
+
+describe('AI 回顾时间范围（今日 / 自定义）', () => {
+  const NOW = new Date('2026-02-15T15:30:00').getTime()
+  const nowDate = new Date(NOW)
+
+  it('今日范围从当天 0 点开始', () => {
+    const bounds = getRangeBounds('day', NOW)
+    expect(bounds.label).toBe('今日')
+    expect(bounds.start).toBe('2026-02-15')
+    const from = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate()).getTime()
+    expect(bounds.from).toBe(from)
+    expect(bounds.to).toBe(NOW)
+  })
+
+  it('自定义范围按本地日期取整天，含起止当天', () => {
+    const bounds = getRangeBounds('custom', NOW, { start: '2026-02-10', end: '2026-02-12' })
+    expect(bounds.start).toBe('2026-02-10')
+    expect(bounds.end).toBe('2026-02-12')
+    expect(bounds.label).toBe('2026-02-10 ~ 2026-02-12')
+    const from = new Date(2026, 1, 10).getTime()
+    const to = new Date(2026, 1, 12, 23, 59, 59, 999).getTime()
+    expect(bounds.from).toBe(from)
+    expect(bounds.to).toBe(to)
+  })
+
+  it('自定义范围起止同一天时标签只显示一个日期', () => {
+    const bounds = getRangeBounds('custom', NOW, { start: '2026-02-10', end: '2026-02-10' })
+    expect(bounds.label).toBe('2026-02-10')
+  })
+
+  it('自定义范围非法时抛错', () => {
+    expect(() => getRangeBounds('custom', NOW, { start: '2026-2-10', end: '2026-02-12' })).toThrow('合法')
+    expect(() => getRangeBounds('custom', NOW, { start: '', end: '2026-02-12' })).toThrow('合法')
+    expect(() => getRangeBounds('custom', NOW, { start: '2026-02-20', end: '2026-02-12' })).toThrow('不能晚于')
+    expect(() => getRangeBounds('custom', NOW, { start: '2026-02-30', end: '2026-03-01' })).toThrow('合法')
+  })
+
+  it('今日范围只含未完成与当天完成的待办', () => {
+    const state = makeState()
+    // 未完成的任务始终进入回顾（与周/月范围语义一致）
+    const pending = createTodo(state, { title: '还没做的任务', groupId: 'inbox' })
+    state.todos.find((todo) => todo.id === pending.id)!.createdAt = '2026-02-08T08:00:00'
+    // 昨天完成的任务不算今天
+    const doneYesterday = createTodo(state, { title: '昨天完成', groupId: 'inbox' })
+    const yesterday = state.todos.find((todo) => todo.id === doneYesterday.id)!
+    yesterday.createdAt = '2026-02-14T08:00:00'
+    yesterday.completedAt = '2026-02-14T20:00:00'
+    // 今天完成的任务要算
+    const doneToday = createTodo(state, { title: '今天完成', groupId: 'inbox' })
+    const today = state.todos.find((todo) => todo.id === doneToday.id)!
+    today.createdAt = '2026-02-15T08:00:00'
+    today.completedAt = '2026-02-15T10:00:00'
+
+    const context = buildSummaryContext(state, 'day', NOW)
+    expect(context.label).toBe('今日')
+    expect(context.total).toBe(2)
+    const titles = context.relevantTodos.map((todo) => todo.title)
+    expect(titles).toContain('还没做的任务')
+    expect(titles).toContain('今天完成')
+    expect(titles).not.toContain('昨天完成')
+  })
+
+  it('自定义范围含边界当天完成的待办', () => {
+    const state = makeState()
+    const mark = (title: string, createdAt: string, completedAt: string | null) => {
+      const todo = createTodo(state, { title, groupId: 'inbox' })
+      const target = state.todos.find((item) => item.id === todo.id)!
+      target.createdAt = createdAt
+      if (completedAt) target.completedAt = completedAt
+      return target
+    }
+    mark('范围第一天完成', '2026-02-10T09:00:00', '2026-02-10T10:00:00')
+    mark('范围最后一天深夜完成', '2026-02-12T20:00:00', '2026-02-12T23:50:00')
+    mark('范围外完成', '2026-02-13T09:00:00', '2026-02-13T10:00:00')
+
+    const context = buildSummaryContext(state, 'custom', NOW, { start: '2026-02-10', end: '2026-02-12' })
+    const titles = context.relevantTodos.map((todo) => todo.title)
+    expect(titles).toContain('范围第一天完成')
+    expect(titles).toContain('范围最后一天深夜完成')
+    expect(titles).not.toContain('范围外完成')
   })
 })

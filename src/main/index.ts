@@ -25,6 +25,7 @@ import type {
   MarkdownExportInput,
   SecurityActionResult,
   SecurityState,
+  SummaryDates,
   SummaryRange,
   UpdateTodoPatch,
   WebDAVSettings
@@ -524,8 +525,10 @@ function registerIpc(): void {
     }
   })
 
-  ipcMain.handle('ai:summarise', async (_event, range: SummaryRange): Promise<AIRequestResult> => {
-    if (!['week', 'month', 'year'].includes(range)) {
+  ipcMain.handle(
+    'ai:summarise',
+    async (_event, range: SummaryRange, dates?: SummaryDates): Promise<AIRequestResult> => {
+    if (!['day', 'week', 'month', 'year', 'custom'].includes(range)) {
       return { ok: false, error: '时间范围不正确' }
     }
     const settings = appStore.getState().settings.ai
@@ -533,7 +536,7 @@ function registerIpc(): void {
       return { ok: false, error: '请先在设置中配置 AI 接口和 API 密钥' }
     }
     try {
-      const context = buildSummaryContext(appStore.getState(), range)
+      const context = buildSummaryContext(appStore.getState(), range, Date.now(), dates)
       const content = await callAIChat(
         settings,
         [

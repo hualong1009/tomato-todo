@@ -4,6 +4,7 @@ import type {
   AppEvent,
   AppState,
   MarkdownExportInput,
+  SummaryDates,
   SummaryRange,
   UpdateTodoPatch,
   WebDAVSettings
@@ -48,7 +49,8 @@ const api: TomatoAPI = {
   updateSettings: (patch) => ipcRenderer.invoke('settings:update', patch),
   testAI: (ai) => ipcRenderer.invoke('ai:test', ai),
   listAIModels: (ai) => ipcRenderer.invoke('ai:models', ai),
-  summarise: (range: SummaryRange) => ipcRenderer.invoke('ai:summarise', range),
+  summarise: (range: SummaryRange, dates?: SummaryDates) =>
+    ipcRenderer.invoke('ai:summarise', range, dates),
 
   testWebDAV: (settings: WebDAVSettings) => ipcRenderer.invoke('webdav:test', settings),
   uploadWebDAV: () => ipcRenderer.invoke('webdav:upload'),

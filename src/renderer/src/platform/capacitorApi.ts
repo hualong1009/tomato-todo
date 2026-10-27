@@ -44,6 +44,7 @@ import type {
   SecurityActionResult,
   SecurityState,
   SettingsUpdateResult,
+  SummaryDates,
   SummaryRange,
   UpdateTodoPatch,
   WebDAVSettings,
@@ -447,13 +448,13 @@ export function createCapacitorApi(): TomatoAPI {
         }
       }
     },
-    summarise: async (range: SummaryRange): Promise<AIRequestResult> => {
+    summarise: async (range: SummaryRange, dates?: SummaryDates): Promise<AIRequestResult> => {
       await loadState()
-      if (!['week', 'month', 'year'].includes(range)) return { ok: false, error: '时间范围不正确' }
+      if (!['day', 'week', 'month', 'year', 'custom'].includes(range)) return { ok: false, error: '时间范围不正确' }
       const ai = state.settings.ai
       if (!ai.apiKey.trim()) return { ok: false, error: '请先在设置中配置 AI 接口和 API 密钥' }
       try {
-        const context = buildSummaryContext(state, range)
+        const context = buildSummaryContext(state, range, Date.now(), dates)
         const content = await callAIChat(
           ai,
           [

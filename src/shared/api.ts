@@ -12,6 +12,7 @@ import type {
   SecurityActionResult,
   SecurityState,
   SettingsUpdateResult,
+  SummaryDates,
   SummaryRange,
   UpdateTodoPatch,
   WebDAVSettings,
@@ -43,7 +44,7 @@ export interface TomatoAPI {
   updateSettings(patch: Partial<AppSettings>): Promise<SettingsUpdateResult>
   testAI(ai: AppSettings['ai']): Promise<AIRequestResult>
   listAIModels(ai: AppSettings['ai']): Promise<AIModelsResult>
-  summarise(range: SummaryRange): Promise<AIRequestResult>
+  summarise(range: SummaryRange, dates?: SummaryDates): Promise<AIRequestResult>
 
   testWebDAV(settings: WebDAVSettings): Promise<WebDAVTestResult>
   uploadWebDAV(): Promise<WebDAVSyncResult>

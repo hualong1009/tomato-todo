@@ -1,14 +1,16 @@
 import { URGENCY_META } from './defaults'
-import type { AppState, SummaryRange, Todo } from './types'
+import type { AppState, SummaryDates, SummaryRange, Todo } from './types'
 import { getTodoStatus, isOverdue } from './todoUtils'
 
 export const RANGE_LABELS: Record<SummaryRange, string> = {
+  day: '今日',
   week: '最近 1 周',
   month: '最近 1 个月',
-  year: '最近 1 年'
+  year: '最近 1 年',
+  custom: '自定义'
 }
 
-const RANGE_DAYS: Record<SummaryRange, number> = {
+const RANGE_DAYS: Record<'week' | 'month' | 'year', number> = {
   week: 7,
   month: 30,
   year: 365
@@ -66,10 +68,46 @@ function within(iso: string | null | undefined, from: number, to: number): boole
   return Number.isFinite(time) && time >= from && time <= to
 }
 
+/** 把 YYYY-MM-DD 解析成本地时区当天起点；非法时返回 NaN。 */
+function parseLocalDate(value: string): number {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return Number.NaN
+  const [year, month, day] = value.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day
+    ? date.getTime()
+    : Number.NaN
+}
+
 export function getRangeBounds(
   range: SummaryRange,
-  now = Date.now()
+  now = Date.now(),
+  dates?: SummaryDates
 ): { from: number; to: number; label: string; start: string; end: string } {
+  if (range === 'day') {
+    const nowDate = new Date(now)
+    const from = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate()).getTime()
+    return {
+      from,
+      to: now,
+      label: RANGE_LABELS.day,
+      start: formatDate(new Date(from).toISOString()),
+      end: formatDate(new Date(now).toISOString())
+    }
+  }
+  if (range === 'custom') {
+    const start = parseLocalDate(dates?.start ?? '')
+    const end = parseLocalDate(dates?.end ?? '')
+    if (Number.isNaN(start) || Number.isNaN(end)) {
+      throw new Error('自定义范围需要合法的开始与结束日期（格式 YYYY-MM-DD）')
+    }
+    if (start > end) {
+      throw new Error('自定义范围的开始日期不能晚于结束日期')
+    }
+    // 结束日期取当天 23:59:59.999，整天的数据都算在内
+    const to = end + 24 * 60 * 60 * 1000 - 1
+    const label = dates!.start === dates!.end ? dates!.start : `${dates!.start} ~ ${dates!.end}`
+    return { from: start, to, label, start: dates!.start, end: dates!.end }
+  }
   const to = now
   const from = now - RANGE_DAYS[range] * 24 * 60 * 60 * 1000
   return {
@@ -84,9 +122,10 @@ export function getRangeBounds(
 export function buildSummaryContext(
   state: AppState,
   range: SummaryRange,
-  now = Date.now()
+  now = Date.now(),
+  dates?: SummaryDates
 ): SummaryContext {
-  const bounds = getRangeBounds(range, now)
+  const bounds = getRangeBounds(range, now, dates)
   const activeTodos = state.todos.filter((todo) => !todo.archivedAt)
 
   const relevantTodos = activeTodos.filter((todo) => {

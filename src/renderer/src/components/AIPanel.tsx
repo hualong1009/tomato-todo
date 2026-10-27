@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { RANGE_LABELS, buildSummaryContext } from '@shared/summary'
-import type { AIRequestResult, AppState, SummaryRange } from '@shared/types'
+import type { AIRequestResult, AppState, SummaryDates, SummaryRange } from '@shared/types'
 import { cleanError, formatDateTime } from '../utils/format'
 import { Markdown } from './Markdown'
 import {
@@ -22,14 +22,37 @@ interface AIPanelProps {
   onToast: (message: string, tone?: 'info' | 'success' | 'error') => void
 }
 
+const RANGE_TABS: SummaryRange[] = ['day', 'week', 'month', 'year', 'custom']
+
+function toDateInput(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
 export function AIPanel({ open, state, onClose, onOpenSettings, onToast }: AIPanelProps) {
   const [range, setRange] = useState<SummaryRange>('week')
-  const [results, setResults] = useState<Partial<Record<SummaryRange, AIRequestResult>>>({})
-  const [loading, setLoading] = useState<SummaryRange | null>(null)
+  const [dates, setDates] = useState<SummaryDates>(() => {
+    const today = new Date()
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6)
+    return { start: toDateInput(start), end: toDateInput(today) }
+  })
+  const [results, setResults] = useState<Partial<Record<string, AIRequestResult>>>({})
+  const [loading, setLoading] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
-  const context = useMemo(() => buildSummaryContext(state, range), [state, range])
-  const result = results[range]
+  // 同一个范围（自定义范围还包含起止日期）对应一份结果，切换日期不会丢之前的总结
+  const rangeKey = range === 'custom' ? `custom:${dates.start}~${dates.end}` : range
+  const context = useMemo(() => {
+    try {
+      return {
+        data: buildSummaryContext(state, range, Date.now(), range === 'custom' ? dates : undefined),
+        error: null as string | null
+      }
+    } catch (error) {
+      return { data: null, error: error instanceof Error ? error.message : '日期范围不合法' }
+    }
+  }, [state, range, dates])
+  const result = results[rangeKey]
   const configured = Boolean(state.settings.ai.apiKey && state.settings.ai.baseUrl && state.settings.ai.model)
 
   useEffect(() => {
@@ -43,11 +66,15 @@ export function AIPanel({ open, state, onClose, onOpenSettings, onToast }: AIPan
 
   const generate = async () => {
     if (loading) return
-    setLoading(range)
+    if (context.error) {
+      onToast(context.error, 'error')
+      return
+    }
+    setLoading(rangeKey)
     setEditing(false)
     try {
-      const response = await window.api.summarise(range)
-      setResults((previous) => ({ ...previous, [range]: response }))
+      const response = await window.api.summarise(range, range === 'custom' ? dates : undefined)
+      setResults((previous) => ({ ...previous, [rangeKey]: response }))
       if (!response.ok) onToast(response.error ?? '生成失败', 'error')
     } catch (error) {
       onToast(cleanError(error), 'error')
@@ -62,11 +89,11 @@ export function AIPanel({ open, state, onClose, onOpenSettings, onToast }: AIPan
   }
 
   const saveEdit = () => {
-    const current = results[range]
+    const current = results[rangeKey]
     if (!current?.ok) return
     setResults((previous) => ({
       ...previous,
-      [range]: { ...current, content: draft }
+      [rangeKey]: { ...current, content: draft }
     }))
     setEditing(false)
     onToast('已保存修改', 'success')
@@ -97,7 +124,7 @@ export function AIPanel({ open, state, onClose, onOpenSettings, onToast }: AIPan
         </header>
 
         <div className="range-tabs">
-          {(['week', 'month', 'year'] as SummaryRange[]).map((item) => (
+          {RANGE_TABS.map((item) => (
             <button
               key={item}
               className={item === range ? 'active' : ''}
@@ -112,31 +139,68 @@ export function AIPanel({ open, state, onClose, onOpenSettings, onToast }: AIPan
           ))}
         </div>
 
+        {range === 'custom' && (
+          <div className="ai-custom-range" data-testid="ai-custom-range">
+            <label>
+              <span>开始日期</span>
+              <input
+                type="date"
+                value={dates.start}
+                max={dates.end}
+                onChange={(event) => setDates((previous) => ({ ...previous, start: event.target.value }))}
+                data-testid="ai-date-start"
+              />
+            </label>
+            <span className="ai-custom-sep">至</span>
+            <label>
+              <span>结束日期</span>
+              <input
+                type="date"
+                value={dates.end}
+                min={dates.start}
+                onChange={(event) => setDates((previous) => ({ ...previous, end: event.target.value }))}
+                data-testid="ai-date-end"
+              />
+            </label>
+          </div>
+        )}
+
         <div className="ai-stats">
-          <div className="ai-stat">
-            <span>范围待办</span>
-            <strong>{context.total}</strong>
-          </div>
-          <div className="ai-stat">
-            <span>完成率</span>
-            <strong>{context.completionRate}</strong>
-          </div>
-          <div className="ai-stat">
-            <span>进行中</span>
-            <strong>{context.inProgressCount}</strong>
-          </div>
-          <div className="ai-stat warn">
-            <span>未完成</span>
-            <strong>{context.overdueCount}</strong>
-          </div>
-          <div className="ai-stat focus">
-            <span>专注分钟</span>
-            <strong>{context.focusMinutes}</strong>
-          </div>
+          {context.data ? (
+            <>
+              <div className="ai-stat">
+                <span>范围待办</span>
+                <strong>{context.data.total}</strong>
+              </div>
+              <div className="ai-stat">
+                <span>完成率</span>
+                <strong>{context.data.completionRate}</strong>
+              </div>
+              <div className="ai-stat">
+                <span>进行中</span>
+                <strong>{context.data.inProgressCount}</strong>
+              </div>
+              <div className="ai-stat warn">
+                <span>未完成</span>
+                <strong>{context.data.overdueCount}</strong>
+              </div>
+              <div className="ai-stat focus">
+                <span>专注分钟</span>
+                <strong>{context.data.focusMinutes}</strong>
+              </div>
+            </>
+          ) : (
+            <div className="ai-stat">
+              <span>日期范围</span>
+              <strong>—</strong>
+            </div>
+          )}
         </div>
 
         <div className="ai-range-note">
-          {context.rangeStart} — {context.rangeEnd} · 已归档事项不会进入 AI 数据
+          {context.data
+            ? `${context.data.rangeStart} — ${context.data.rangeEnd} · 已归档事项不会进入 AI 数据`
+            : '请选择合法的日期范围'}
         </div>
 
         <div className="ai-body">
@@ -235,9 +299,17 @@ export function AIPanel({ open, state, onClose, onOpenSettings, onToast }: AIPan
                 <span />
                 <SparklesIcon size={34} />
               </div>
-              <h3>生成「{RANGE_LABELS[range]}」执行总结</h3>
+              <h3>
+                生成「
+                {range === 'custom'
+                  ? dates.start === dates.end
+                    ? dates.start
+                    : `${dates.start} ~ ${dates.end}`
+                  : RANGE_LABELS[range]}
+                」执行总结
+              </h3>
               <p>
-                将基于 {context.total} 条待办、紧急程度、期望/实际完成时间和专注记录生成回顾。模板可在设置中随时修改。
+                将基于 {context.data?.total ?? 0} 条待办、紧急程度、期望/实际完成时间和专注记录生成回顾。模板可在设置中随时修改。
               </p>
             </div>
           )}
@@ -251,7 +323,7 @@ export function AIPanel({ open, state, onClose, onOpenSettings, onToast }: AIPan
           <button
             className="btn ai-generate"
             onClick={() => void generate()}
-            disabled={Boolean(loading) || !configured}
+            disabled={Boolean(loading) || !configured || Boolean(context.error)}
             data-testid="ai-generate"
           >
             {loading ? (

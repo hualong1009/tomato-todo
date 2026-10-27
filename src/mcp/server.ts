@@ -594,9 +594,20 @@ export function createTodoMcpServer(dataFile: string): McpServer {
     {
       title: 'AI 总结待办',
       description:
-        'Generate an AI review of todos for a time range (week, month or year), same as the in-app "AI 回顾" panel. Uses the AI provider configured in app settings; archived todos are excluded. Returns an error if the AI provider is not configured.',
+        'Generate an AI review of todos for a time range (day, week, month, year or a custom date range), same as the in-app "AI 回顾" panel. Uses the AI provider configured in app settings; archived todos are excluded. Returns an error if the AI provider is not configured.',
       inputSchema: {
-        range: z.enum(['week', 'month', 'year']).optional().describe('Summary time range. Default: week.')
+        range: z
+          .enum(['day', 'week', 'month', 'year', 'custom'])
+          .optional()
+          .describe('Summary time range. Default: week.'),
+        start: z
+          .string()
+          .optional()
+          .describe('Custom range start date (YYYY-MM-DD), local time. Required when range is custom.'),
+        end: z
+          .string()
+          .optional()
+          .describe('Custom range end date (YYYY-MM-DD, inclusive). Required when range is custom.')
       },
       annotations: { readOnlyHint: true }
     },
@@ -608,7 +619,12 @@ export function createTodoMcpServer(dataFile: string): McpServer {
           throw new Error('尚未配置 AI 接口：请先在应用的「设置 → AI 接口」中填写 Base URL、API 密钥和模型')
         }
         const range: SummaryRange = args.range ?? 'week'
-        const context = buildSummaryContext(state, range)
+        const context = buildSummaryContext(
+          state,
+          range,
+          Date.now(),
+          range === 'custom' ? { start: args.start ?? '', end: args.end ?? '' } : undefined
+        )
         const content = await callAIChat(
           settings,
           [
@@ -624,6 +640,8 @@ export function createTodoMcpServer(dataFile: string): McpServer {
         return jsonResult({
           ok: true,
           range,
+          start: context.rangeStart,
+          end: context.rangeEnd,
           model: settings.model,
           generatedAt: new Date().toISOString(),
           content
