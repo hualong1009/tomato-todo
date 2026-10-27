@@ -1,4 +1,4 @@
-# 打 v* 标签时：构建正式签名的 Android APK + Windows 安装包，上传到 Release
+# 打 v* 标签时：构建正式签名的 Android APK + Windows / Linux / macOS 安装包，上传到 Release
 name: Release
 
 on:
@@ -144,3 +144,91 @@ jobs:
         with:
           name: tomato-todo-windows
           path: dist-win/*.exe
+
+  linux:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 构建主进程 / 渲染层 / MCP 入口
+        run: npm run build
+
+      # AppImage / deb / rpm 三格式（deb/rpm 需在 Linux 上打包）
+      - name: 构建 Linux 发行包
+        run: npx electron-builder --linux --publish never
+        env:
+          USE_HARD_LINKS: 'false'
+
+      - name: 整理产物
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          mkdir -p dist-linux
+          cp release/tomato-todo-*"${VERSION}"* dist-linux/ 2>/dev/null || true
+          ls -la dist-linux/
+
+      - name: 上传到 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-linux/*
+          generate_release_notes: true
+
+      - name: 同时上传为构建产物（Release 失败时仍可下载）
+        uses: actions/upload-artifact@v4
+        with:
+          name: tomato-todo-linux
+          path: dist-linux/*
+
+  macos:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 构建主进程 / 渲染层 / MCP 入口
+        run: npm run build
+
+      # x64 + arm64 双架构 dmg；无签名证书时出未签名包，用户首次右键打开
+      - name: 构建 macOS dmg
+        run: npx electron-builder --mac --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: 整理产物
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          mkdir -p dist-mac
+          cp release/tomato-todo-*"${VERSION}"*.dmg dist-mac/ 2>/dev/null || true
+          ls -la dist-mac/
+
+      - name: 上传到 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-mac/*
+          generate_release_notes: true
+
+      - name: 同时上传为构建产物（Release 失败时仍可下载）
+        uses: actions/upload-artifact@v4
+        with:
+          name: tomato-todo-macos
+          path: dist-mac/*
