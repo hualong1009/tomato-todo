@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { encryptBackup } from '../src/main/backupCrypto'
+import { blobNameFor } from '../src/shared/blobSync'
 
 /**
  * Web / Capacitor 适配层测试。
@@ -9,7 +10,9 @@ import { encryptBackup } from '../src/main/backupCrypto'
  */
 const h = vi.hoisted(() => ({
   storage: new Map<string, string>(),
-  request: vi.fn()
+  request: vi.fn(),
+  binaryPut: vi.fn(),
+  binaryRequest: vi.fn()
 }))
 
 vi.mock('@capacitor/preferences', () => ({
@@ -35,6 +38,8 @@ vi.mock('@capacitor/core', () => ({
     request: (...args: unknown[]) => h.request(...args)
   },
   registerPlugin: () => ({
+    put: (...args: unknown[]) => h.binaryPut(...args),
+    request: (...args: unknown[]) => h.binaryRequest(...args),
     update: async () => undefined,
     apply: async () => undefined,
     activateWebViewInsets: async () => ({ top: 40, bottom: 30, left: 0, right: 0 }),
@@ -59,9 +64,15 @@ function respondBytes(data: Uint8Array, status = 200) {
   respond(Buffer.from(data).toString('base64'), status)
 }
 
+function respondDAV(status: number, data = '') {
+  h.binaryRequest.mockResolvedValueOnce({ status, data })
+}
+
 beforeEach(() => {
   h.storage.clear()
   h.request.mockReset()
+  h.binaryPut.mockReset()
+  h.binaryRequest.mockReset()
 })
 
 describe('Web 适配层：状态与持久化', () => {
@@ -179,9 +190,11 @@ describe('Web 适配层：AI 与 WebDAV', () => {
       }
     })
     await api.addTodo({ title: '备份任务', groupId: 'inbox' })
-    respond('', 201)
+    respondDAV(201) // MKCOL tomato-todo/
+    respond('', 201) // PUT data.json
     const result = await api.uploadWebDAV()
     expect(result.ok).toBe(true)
+    expect(h.binaryRequest.mock.calls[0][0].method).toBe('MKCOL')
     const call = h.request.mock.calls[0][0] as { url: string; method: string; data: string }
     expect(call.method).toBe('PUT')
     expect(call.url).toBe('https://dav.test/remote/tomato-todo/data.json')
@@ -298,6 +311,8 @@ describe('Web 适配层：AI 与 WebDAV', () => {
     expect(restored.todos[0].attachments[0].data).toBe(attachmentData)
     expect(restored.settings.ai.apiKey).toBe('sk-local-only')
     expect(restored.settings.webdav.encryptionPassword).toBe('🍅 测试密码')
+    expect(restored.settings.webdav.lastStatus).toBe('success')
+    expect(restored.settings.webdav.lastSyncAt).toBeTruthy()
     expect(h.request.mock.calls.map(([call]) => call.url)).toEqual([
       'https://dav.test/remote/tomato-todo/data.json',
       `https://dav.test/remote/tomato-todo/blobs/${imageName}`,
@@ -336,20 +351,126 @@ describe('Web 适配层：AI 与 WebDAV', () => {
     expect((await api.getState()).todos[0].content).toBe('')
   })
 
-  it('设置加密密码时拒绝上传（手机端不支持）', async () => {
+  it('设置加密密码后可生成桌面端能读取的 TTENC2 主备份', async () => {
     const api = await freshApi()
-    const base = (await api.getState()).settings
-    await api.updateSettings({
-      webdav: {
-        ...base.webdav,
-        url: 'https://dav.test/remote/',
-        remotePath: 'data.json',
-        encryptionPassword: 'pass'
-      }
-    })
+    const settings = (await api.getState()).settings.webdav
+    await api.updateSettings({ webdav: {
+      ...settings, url: 'https://dav.test/root/', remotePath: 'tomato-todo/data.json',
+      encryptionPassword: '🍅 shared-password'
+    } })
+    await api.addTodo({ title: '手机端修改后的任务' })
+    respondDAV(201) // 创建远端目录
+    h.binaryPut.mockResolvedValueOnce({ status: 201 })
     const result = await api.uploadWebDAV()
-    expect(result.ok).toBe(false)
-    expect(result.message).toContain('暂不支持加密上传')
+    expect(result.ok).toBe(true)
+    const put = h.binaryPut.mock.calls[0][0] as { url: string; headers: Record<string, string>; data: string }
+    expect(put.url).toBe('https://dav.test/root/tomato-todo/data.json')
+    expect(put.headers['Content-Type']).toBe('application/octet-stream')
+    const { decryptBackup } = await import('../src/main/backupCrypto')
+    const saved = JSON.parse(decryptBackup(Buffer.from(put.data, 'base64'), '🍅 shared-password'))
+    expect(saved.todos[0].title).toBe('手机端修改后的任务')
+    expect(saved.groups.length).toBeGreaterThan(0)
+    expect(saved).not.toHaveProperty('settings')
+    expect(h.binaryRequest.mock.calls.map(([call]) => call.method)).toEqual(['MKCOL'])
+  })
+
+  it('外置图片与附件先于主文件上传，桌面端可解密全部资源', async () => {
+    const api = await freshApi()
+    const image = 'data:image/png;base64,QUJD'
+    const attachment = 'data:application/pdf;base64,REVG'
+    const base = (await api.getState()).settings.webdav
+    await api.updateSettings({ webdav: {
+      ...base, url: 'https://dav.test/root/', remotePath: 'tomato-todo/data.json',
+      encryptionPassword: 'shared-secret'
+    } })
+    await api.addTodo({
+      title: '移动端图片与附件', content: `![截图](${image})`,
+      attachments: [{ id: 'att-1', name: '报告.pdf', mime: 'application/pdf',
+        size: 3, data: attachment, createdAt: new Date().toISOString() }]
+    })
+    respondDAV(201) // MKCOL tomato-todo/
+    respondDAV(405) // 目录已存在
+    respondDAV(201) // MKCOL blobs/
+    respondDAV(207, '<d:multistatus xmlns:d="DAV:"/>') // PROPFIND blobs/
+    h.binaryPut.mockResolvedValue({ status: 201 })
+    const result = await api.uploadWebDAV()
+    expect(result.ok).toBe(true)
+    expect(h.binaryPut).toHaveBeenCalledTimes(3) // 图片、附件、主文件
+    const puts = h.binaryPut.mock.calls.map(([options]) => options as { url: string; data: string })
+    const { decryptBackup } = await import('../src/main/backupCrypto')
+    const decoded = puts.map((item) => decryptBackup(Buffer.from(item.data, 'base64'), 'shared-secret'))
+    expect(decoded).toContain(image)
+    expect(decoded).toContain(attachment)
+    const main = JSON.parse(decoded[2])
+    expect(main.version).toBe(2)
+    expect(main.todos[0].content).toMatch(/!\[截图\]\(blob:[a-f0-9]{16}\.png\)/)
+    expect(main.todos[0].attachments[0].data).toMatch(/^blob:[a-f0-9]{16}\.pdf$/)
+    expect(main.assets).toHaveLength(2)
+    expect(puts[2].url).toBe('https://dav.test/root/tomato-todo/data.json')
+    expect((await api.getState()).todos[0].content).toContain(image) // 本地仍自包含
+
+    // 真正通过桌面端的恢复逻辑读取手机上传的全部密文，验证双向互通。
+    const { downloadFromWebDAV } = await import('../src/main/webdav')
+    const stored = new Map(puts.map((item) => [item.url, Buffer.from(item.data, 'base64')]))
+    const desktop = await downloadFromWebDAV((await api.getState()).settings.webdav,
+      async (input) => {
+        const bytes = stored.get(String(input))
+        return bytes ? new Response(bytes, { status: 200 }) : new Response(null, { status: 404 })
+      })
+    expect(desktop.ok).toBe(true)
+    const desktopTodos = (desktop.raw as { todos: Array<{ content: string; attachments: Array<{ data: string }> }> }).todos
+    expect(desktopTodos[0].content).toContain(image)
+    expect(desktopTodos[0].attachments[0].data).toBe(attachment)
+  })
+
+  it('已有同名资源使用旧密码时重新加密，避免主文件引用不可解密资源', async () => {
+    const api = await freshApi()
+    const image = 'data:image/png;base64,QUJD'
+    const name = blobNameFor(image)
+    const initial = (await api.getState()).settings.webdav
+    await api.updateSettings({ webdav: {
+      ...initial, url: 'https://dav.test/root/', remotePath: 'data.json',
+      encryptionPassword: 'new-password'
+    } })
+    await api.addTodo({ title: '图片', content: `![图](${image})` })
+    respondDAV(201) // MKCOL blobs/
+    respondDAV(207, `<d:href>/root/blobs/${name}</d:href>`)
+    respondBytes(encryptBackup(image, 'old-password'))
+    h.binaryPut.mockResolvedValue({ status: 201 })
+    const result = await api.uploadWebDAV()
+    expect(result.ok).toBe(true)
+    expect(h.binaryPut).toHaveBeenCalledTimes(2) // 重传图片，再传主文件
+    const first = h.binaryPut.mock.calls[0][0] as { url: string; data: string }
+    expect(first.url).toBe(`https://dav.test/root/blobs/${name}`)
+    const { decryptBackup } = await import('../src/main/backupCrypto')
+    expect(decryptBackup(Buffer.from(first.data, 'base64'), 'new-password')).toBe(image)
+  })
+
+  it('附件上传失败时不写远端主文件，且自动上传会在待办变动后触发', async () => {
+    const api = await freshApi()
+    const base = (await api.getState()).settings.webdav
+    await api.updateSettings({ webdav: {
+      ...base, url: 'https://dav.test/root/', remotePath: 'data.json',
+      encryptionPassword: 'pass', enabled: false
+    } })
+    await api.addTodo({ title: '含附件', attachments: [{ id: '1', name: 'x', mime: 'text/plain',
+      size: 3, data: 'data:text/plain;base64,QUJD', createdAt: new Date().toISOString() }] })
+    respondDAV(201) // MKCOL blobs/
+    respondDAV(207, '<d:multistatus xmlns:d="DAV:"/>')
+    h.binaryPut.mockResolvedValueOnce({ status: 507 })
+    const failed = await api.uploadWebDAV()
+    expect(failed.ok).toBe(false)
+    expect(h.binaryPut).toHaveBeenCalledTimes(1)
+    expect((await api.getState()).settings.webdav.lastStatus).toBe('error')
+
+    const settings = (await api.getState()).settings.webdav
+    await api.updateSettings({ webdav: { ...settings, enabled: true, autoUpload: true, splitAssets: false } })
+    // 无需显式调用 uploadWebDAV：本地编辑自动排队上传。
+    h.binaryPut.mockResolvedValueOnce({ status: 201 })
+    await api.addTodo({ title: '自动同步的新待办' })
+    await new Promise((resolve) => setTimeout(resolve, 1900))
+    expect(h.binaryPut).toHaveBeenCalledTimes(2)
+    expect((await api.getState()).settings.webdav.lastStatus).toBe('success')
   })
 })
 

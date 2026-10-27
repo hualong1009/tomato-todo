@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { blobNameFor, externaliseAssets } from '../src/main/blobSync'
 import { createRemotePayloadWith, parseRemotePayload } from '../src/shared/backup'
@@ -42,6 +43,7 @@ describe('外置资源（blobs）', () => {
     expect(blobNameFor(PNG)).toBe(blobNameFor(PNG))
     expect(blobNameFor(PNG)).not.toBe(blobNameFor(PDF))
     expect(blobNameFor(PNG)).toMatch(/^[a-f0-9]{16}\.png$/)
+    expect(blobNameFor(PNG)).toBe(`${createHash('sha256').update(PNG).digest('hex').slice(0, 16)}.png`)
     expect(blobNameFor(PDF)).toMatch(/^[a-f0-9]{16}\.pdf$/)
   })
 

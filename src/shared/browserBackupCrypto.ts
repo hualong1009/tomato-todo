@@ -1,5 +1,5 @@
 import { scryptAsync } from '@noble/hashes/scrypt'
-import { gunzipSync } from 'fflate'
+import { gunzipSync, gzipSync } from 'fflate'
 
 /**
  * 浏览器 / Android WebView 版 TTENC1 / TTENC2 解密。
@@ -18,6 +18,33 @@ export function browserBackupFormatVersion(data: Uint8Array): 1 | 2 | null {
   if (data[5] === 49) return 1
   if (data[5] === 50) return 2
   return null
+}
+
+/** 写出桌面端可读取的 TTENC2 容器：每次使用独立随机 salt 与 IV。 */
+export async function encryptBrowserBackup(plaintext: string, password: string): Promise<Uint8Array> {
+  if (!password) throw new Error('未设置加密密码')
+  if (!globalThis.crypto?.subtle) throw new Error('当前设备不支持备份加密（Web Crypto 不可用）')
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const keyBytes = await scryptAsync(encoder.encode(password), salt, {
+    N: 16384, r: 8, p: 1, dkLen: 32
+  })
+  const key = await crypto.subtle.importKey('raw', new Uint8Array(keyBytes), 'AES-GCM', false, ['encrypt'])
+  const compressed = gzipSync(encoder.encode(plaintext), { level: 6 })
+  const encrypted = new Uint8Array(await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: new Uint8Array(iv), tagLength: 128 },
+    key,
+    new Uint8Array(compressed)
+  ))
+  const bodyLength = encrypted.length - 16
+  // Web Crypto 产生 ciphertext + tag，Node 备份格式要求 tag + ciphertext。
+  const output = new Uint8Array(HEADER_LENGTH + bodyLength)
+  output.set(encoder.encode('TTENC2'))
+  output.set(salt, 6)
+  output.set(iv, 22)
+  output.set(encrypted.subarray(bodyLength), 34)
+  output.set(encrypted.subarray(0, bodyLength), HEADER_LENGTH)
+  return output
 }
 
 export async function decryptBrowserBackup(data: Uint8Array, password: string): Promise<string> {

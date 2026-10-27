@@ -899,13 +899,10 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast }: Sett
                     </button>
                   </div>
                   <small>
-                    {isMobile
-                      ? '用于恢复桌面端加密备份（含图片/附件）；手机端暂不支持加密上传，设置密码后无法在手机端上传。密码只保存在本机。'
-                      : '非空时上传前用 AES-256-GCM 加密备份、从远端恢复时自动解密；加密密码只保存在本机，不会上传。'}
+                    非空时上传前用 gzip + AES-256-GCM 加密备份、从远端恢复时自动解密；加密密码只保存在本机，不会上传。
                   </small>
                 </label>
-                {!isMobile && (
-                  <label className="toggle-row compact">
+                <label className="toggle-row compact">
                     <input
                       type="checkbox"
                       checked={draft.webdav.splitAssets !== false}
@@ -918,7 +915,6 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast }: Sett
                       <small>正文图片、附件单独存到 blobs/，主备份文件保持几百 KB，且同一文件只传一次</small>
                     </span>
                   </label>
-                )}
                 <label className="toggle-row compact">
                   <input
                     type="checkbox"
@@ -929,7 +925,7 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast }: Sett
                   <span className="toggle-ui" />
                   <span>
                     <strong>自动上传</strong>
-                    <small>变动后约 1.6 秒静默同步</small>
+                    <small>变动后约 1.6 秒自动上传；从另一设备获取变动需手动恢复，多个设备同时编辑可能互相覆盖</small>
                   </span>
                 </label>
                 <div className="webdav-actions">
