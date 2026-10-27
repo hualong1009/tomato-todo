@@ -7,11 +7,12 @@ interface ModalProps {
   onClose: () => void
   title?: ReactNode
   className?: string
+  backdropClassName?: string
   children: ReactNode
   testId?: string
 }
 
-export function Modal({ open, onClose, title, className = '', children, testId }: ModalProps) {
+export function Modal({ open, onClose, title, className = '', backdropClassName = '', children, testId }: ModalProps) {
   useEffect(() => {
     if (!open) return
     const onKey = (event: KeyboardEvent) => {
@@ -24,7 +25,7 @@ export function Modal({ open, onClose, title, className = '', children, testId }
   if (!open) return null
   return (
     <div
-      className="modal-backdrop"
+      className={`modal-backdrop ${backdropClassName}`}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}

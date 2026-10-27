@@ -82,6 +82,7 @@ const api: TomatoAPI = {
   copyText: (text: string) => ipcRenderer.invoke('app:copy', text),
   notify: (title: string, body: string) => ipcRenderer.invoke('app:notify', title, body),
   openExternal: (url: string) => ipcRenderer.invoke('app:open-external', url),
+  checkForUpdates: () => ipcRenderer.invoke('app:check-updates'),
 
   windowMinimize: () => ipcRenderer.invoke('window:minimize'),
   windowToggleMaximize: () => ipcRenderer.invoke('window:toggle-maximize'),

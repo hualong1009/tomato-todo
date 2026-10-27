@@ -32,6 +32,7 @@ import { splitDataUrl } from '../../../shared/attachments'
 import { collectBlobRefs, inlineAttachmentRefs, inlineBlobRefs } from '../../../shared/blobRefs'
 import { buildWidgetSummary } from '../../../shared/widget'
 import { buildSummaryContext } from '../../../shared/summary'
+import { evaluateRelease, LATEST_RELEASE_API } from '../../../shared/updates'
 import type {
   AddTodoInput,
   AIRequestResult,
@@ -75,6 +76,10 @@ let state: AppState = createDefaultState()
  */
 const widgetPlugin = Capacitor.isNativePlatform()
   ? registerPlugin<{ update(options: { summary: string }): Promise<void> }>('TomatoWidget')
+  : null
+
+const externalPlugin = Capacitor.isNativePlatform()
+  ? registerPlugin<{ open(options: { url: string }): Promise<void> }>('TomatoExternal')
   : null
 
 interface SafeAreaInsets {
@@ -925,7 +930,40 @@ export function createCapacitorApi(): TomatoAPI {
     },
     notify: async () => undefined,
     openExternal: async (url: string) => {
-      window.open(url, '_blank')
+      if (!/^https?:\/\//i.test(url)) throw new Error('仅允许打开 http 或 https 链接')
+      if (externalPlugin) await externalPlugin.open({ url })
+      else window.open(url, '_blank', 'noopener,noreferrer')
+    },
+    checkForUpdates: async () => {
+      try {
+        let raw: unknown
+        if (Capacitor.isNativePlatform()) {
+          const response = await CapacitorHttp.request({
+            url: LATEST_RELEASE_API,
+            method: 'GET',
+            headers: { Accept: 'application/vnd.github+json' },
+            responseType: 'json',
+            connectTimeout: 8000,
+            readTimeout: 10000
+          })
+          if (response.status !== 200) {
+            return { status: 'error', message: `更新检查失败（HTTP ${response.status}）` }
+          }
+          raw = response.data
+        } else {
+          const response = await window.fetch(LATEST_RELEASE_API, {
+            headers: { Accept: 'application/vnd.github+json' },
+            signal: AbortSignal.timeout(10000)
+          })
+          if (!response.ok) {
+            return { status: 'error', message: `更新检查失败（HTTP ${response.status}）` }
+          }
+          raw = await response.json()
+        }
+        return evaluateRelease(raw, __APP_VERSION__)
+      } catch {
+        return { status: 'error', message: '无法连接 GitHub，请检查网络后重试' }
+      }
     },
 
     windowMinimize: async () => undefined,

@@ -13,7 +13,8 @@ const h = vi.hoisted(() => ({
   request: vi.fn(),
   binaryPut: vi.fn(),
   binaryGet: vi.fn(),
-  binaryRequest: vi.fn()
+  binaryRequest: vi.fn(),
+  externalOpen: vi.fn()
 }))
 
 vi.mock('@capacitor/preferences', () => ({
@@ -42,6 +43,7 @@ vi.mock('@capacitor/core', () => ({
     put: (...args: unknown[]) => h.binaryPut(...args),
     get: (...args: unknown[]) => h.binaryGet(...args),
     request: (...args: unknown[]) => h.binaryRequest(...args),
+    open: (...args: unknown[]) => h.externalOpen(...args),
     update: async () => undefined,
     apply: async () => undefined,
     activateWebViewInsets: async () => ({ top: 40, bottom: 30, left: 0, right: 0 }),
@@ -76,6 +78,7 @@ beforeEach(() => {
   h.binaryPut.mockReset()
   h.binaryGet.mockReset()
   h.binaryRequest.mockReset()
+  h.externalOpen.mockReset()
 })
 
 describe('Web 适配层：状态与持久化', () => {
@@ -143,6 +146,35 @@ describe('Web 适配层：状态与持久化', () => {
     const state = await api.getState()
     expect(state.todos).toHaveLength(0)
     expect(state.settings.ai.apiKey).toBe('')
+  })
+})
+
+describe('Web 适配层：GitHub Releases 更新', () => {
+  it('使用原生 HTTP 检查最新版本，并通过系统浏览器打开发布页', async () => {
+    vi.stubGlobal('__APP_VERSION__', '1.2.7')
+    const api = await freshApi()
+    respond({ tag_name: 'v1.2.8', html_url: 'https://evil.test' })
+    expect(await api.checkForUpdates()).toEqual({
+      status: 'available', version: '1.2.8',
+      url: 'https://github.com/hualong1009/tomato-todo/releases/latest'
+    })
+    expect(h.request.mock.calls[0][0]).toMatchObject({
+      method: 'GET', url: 'https://api.github.com/repos/hualong1009/tomato-todo/releases/latest'
+    })
+    h.externalOpen.mockResolvedValueOnce(undefined)
+    await api.openExternal('https://github.com/hualong1009/tomato-todo/releases/latest')
+    expect(h.externalOpen).toHaveBeenCalledWith({
+      url: 'https://github.com/hualong1009/tomato-todo/releases/latest'
+    })
+    vi.unstubAllGlobals()
+  })
+
+  it('断网时返回错误而不影响应用', async () => {
+    vi.stubGlobal('__APP_VERSION__', '1.2.7')
+    const api = await freshApi()
+    h.request.mockRejectedValueOnce(new Error('offline'))
+    expect((await api.checkForUpdates()).status).toBe('error')
+    vi.unstubAllGlobals()
   })
 })
 

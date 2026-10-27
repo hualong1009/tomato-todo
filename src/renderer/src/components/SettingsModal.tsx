@@ -40,6 +40,7 @@ interface SettingsModalProps {
   onClose: () => void
   onSave: (settings: AppSettings) => Promise<{ ok: boolean; warning?: string }>
   onToast: (message: string, tone?: 'info' | 'success' | 'error') => void
+  onCheckUpdates: () => Promise<void>
 }
 
 const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
@@ -86,7 +87,7 @@ const PLACEHOLDERS = [
   '{{todos}}'
 ]
 
-export function SettingsModal({ open, settings, onClose, onSave, onToast }: SettingsModalProps) {
+export function SettingsModal({ open, settings, onClose, onSave, onToast, onCheckUpdates }: SettingsModalProps) {
   const [tab, setTab] = useState<Tab>('general')
   const [draft, setDraft] = useState<AppSettings>(settings)
   const [saveBusy, setSaveBusy] = useState(false)
@@ -108,6 +109,7 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast }: Sett
   const [confirmDeleteTemplateId, setConfirmDeleteTemplateId] = useState<string | null>(null)
   const [resetPassword, setResetPassword] = useState('')
   const [resetBusy, setResetBusy] = useState(false)
+  const [updateBusy, setUpdateBusy] = useState(false)
   const hasPassword = settings.security.passwordHash !== ''
 
   useEffect(() => {
@@ -1262,10 +1264,28 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast }: Sett
                   <span>构建</span>
                   <code>Electron + React + Vite</code>
                 </div>
-                <button className="btn ghost" onClick={() => void window.api.openExternal('https://twemoji.twitter.com/')}>
-                  <ExternalIcon size={14} />
-                  Twemoji 图标来源
-                </button>
+                <div className="webdav-actions">
+                  <button
+                    className="btn primary"
+                    data-testid="setting-check-updates"
+                    disabled={updateBusy}
+                    onClick={async () => {
+                      setUpdateBusy(true)
+                      try {
+                        await onCheckUpdates()
+                      } finally {
+                        setUpdateBusy(false)
+                      }
+                    }}
+                  >
+                    {updateBusy ? <span className="spinner" /> : <DownloadIcon size={14} />}
+                    检查更新
+                  </button>
+                  <button className="btn ghost" onClick={() => void window.api.openExternal('https://twemoji.twitter.com/')}>
+                    <ExternalIcon size={14} />
+                    Twemoji 图标来源
+                  </button>
+                </div>
               </section>
             )}
           </div>

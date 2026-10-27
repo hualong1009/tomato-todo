@@ -91,6 +91,8 @@ export interface GeneralSettings {
   theme: ThemeMode
   /** 关闭按钮最小化到系统托盘 */
   closeToTray: boolean
+  /** 用户选择不再提醒的 GitHub Release 版本（只忽略这一版）。 */
+  ignoredUpdateVersion: string | null
 }
 
 export type WebDAVStatus = 'idle' | 'success' | 'error'

@@ -19,6 +19,7 @@ import type {
   WebDAVSyncResult,
   WebDAVTestResult
 } from './types'
+import type { UpdateCheckResult } from './updates'
 
 export interface TomatoAPI {
   platform: string
@@ -71,6 +72,7 @@ export interface TomatoAPI {
   copyText(text: string): Promise<void>
   notify(title: string, body: string): Promise<void>
   openExternal(url: string): Promise<void>
+  checkForUpdates(): Promise<UpdateCheckResult>
 
   windowMinimize(): Promise<void>
   windowToggleMaximize(): Promise<boolean>
