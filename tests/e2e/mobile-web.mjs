@@ -73,9 +73,41 @@ try {
   await page.click('[data-testid="mobile-fab"]')
   await page.waitForSelector('.sheet-composer [data-testid="composer-title"]')
   check('新建面板打开', true)
+
+  // 模拟 Android 边到边 WebView：键盘只通过原生 IME inset 通知，
+  // 布局/visualViewport 暂未缩小。面板必须抬到键盘之上，不能把整块
+  // 键盘高度误写进 --safe-bottom 导致表单被遮挡（#11）。
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty('--safe-bottom', '24px')
+    document.documentElement.style.setProperty('--keyboard-inset', '320px')
+    window.dispatchEvent(new Event('tomato:insets'))
+  })
+  await page.waitForFunction(() => {
+    const sheet = document.querySelector('.sheet-composer')?.closest('.sheet')
+    return sheet && sheet.getBoundingClientRect().bottom <= window.innerHeight - 315
+  })
+  const keyboardLayout = await page.evaluate(() => {
+    const sheet = document.querySelector('.sheet-composer')?.closest('.sheet')
+    const header = sheet?.querySelector('.sheet-head')
+    return {
+      sheetBottom: sheet?.getBoundingClientRect().bottom ?? Infinity,
+      headerTop: header?.getBoundingClientRect().top ?? -1,
+      panelHeight: sheet?.getBoundingClientRect().height ?? Infinity
+    }
+  })
+  check('输入法弹出时表单保持在可见区域且标题避开状态栏',
+    keyboardLayout.sheetBottom <= 844 - 315 && keyboardLayout.headerTop >= 0 && keyboardLayout.panelHeight < 524)
   await page.fill('.sheet-composer [data-testid="composer-title"]', '移动端任务')
+  await page.locator('.sheet-composer [data-testid="composer-submit"]').scrollIntoViewIfNeeded()
+  const submitBox = await page.locator('.sheet-composer [data-testid="composer-submit"]').boundingBox()
+  check('输入法打开时添加按钮仍可见可点', Boolean(submitBox && submitBox.y + submitBox.height < 844 - 315))
   await page.click('.sheet-composer [data-testid="composer-submit"]')
   await page.waitForSelector('[data-testid="todo-item"]')
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty('--keyboard-inset', '0px')
+    document.documentElement.style.removeProperty('--safe-bottom')
+    window.dispatchEvent(new Event('tomato:insets'))
+  })
   check(
     '新增待办成功',
     (await page.locator('[data-testid="todo-item"] .todo-title').first().innerText()).includes('移动端任务')

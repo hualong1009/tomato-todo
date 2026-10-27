@@ -78,6 +78,8 @@ const widgetPlugin = Capacitor.isNativePlatform()
 interface SafeAreaInsets {
   top: number
   bottom: number
+  /** IME inset from screen bottom (0 while keyboard is hidden), separate from system bar */
+  ime?: number
   left: number
   right: number
 }
@@ -103,10 +105,14 @@ let lastScheme: string | null = null
 function applySafeAreaInsets(data: SafeAreaInsets): void {
   if (typeof document === 'undefined') return
   const root = document.documentElement
-  if (data.top > 0) root.style.setProperty('--safe-top', `${data.top}px`)
-  if (data.bottom > 0) root.style.setProperty('--safe-bottom', `${data.bottom}px`)
-  if (data.left > 0) root.style.setProperty('--safe-left', `${data.left}px`)
-  if (data.right > 0) root.style.setProperty('--safe-right', `${data.right}px`)
+  root.style.setProperty('--safe-top', `${data.top}px`)
+  root.style.setProperty('--safe-bottom', `${data.bottom}px`)
+  root.style.setProperty('--safe-left', `${data.left}px`)
+  root.style.setProperty('--safe-right', `${data.right}px`)
+  // --safe-bottom 只能表示手势条，不能混入键盘高度；浮层另行避让 IME。
+  // IME inset 从窗口底部量到键盘顶部（含手势条）；整段都必须避开。
+  root.style.setProperty('--keyboard-inset', `${Math.max(0, data.ime ?? 0)}px`)
+  window.dispatchEvent(new Event('tomato:insets'))
 }
 
 let insetsSetup = false
