@@ -9,8 +9,9 @@ import { Capacitor, CapacitorHttp, registerPlugin } from '@capacitor/core'
 import { Preferences } from '@capacitor/preferences'
 import type { TomatoAPI } from '../../../shared/api'
 import { callAIChat, listAIModels, testAIConnection } from '../../../shared/aiClient'
-import { createRemotePayload, parseRemotePayload } from '../../../shared/backup'
-import { browserBackupFormatVersion, decryptBrowserBackup } from '../../../shared/browserBackupCrypto'
+import { createRemotePayload, createRemotePayloadWith, parseRemotePayload } from '../../../shared/backup'
+import { browserBackupFormatVersion, decryptBrowserBackup, encryptBrowserBackup } from '../../../shared/browserBackupCrypto'
+import { externaliseAssets } from '../../../shared/blobSync'
 import { createDefaultState, normaliseState } from '../../../shared/normalise'
 import {
   archiveTodo,
@@ -226,6 +227,7 @@ function loadState(): Promise<void> {
 function mutate(fn: (draft: AppState) => unknown): AppState {
   fn(state)
   emit()
+  scheduleWebDAVUpload()
   return snapshot()
 }
 
@@ -281,7 +283,7 @@ const nativeFetch = async (input: RequestInfo | URL, init?: RequestInit): Promis
   })
   const text =
     typeof response.data === 'string' ? response.data : JSON.stringify(response.data ?? null)
-  return new Response(text, {
+  return new Response([204, 205, 304].includes(response.status) ? null : text, {
     status: response.status,
     headers: (response.headers ?? {}) as Record<string, string>
   })
@@ -292,21 +294,46 @@ const request: typeof fetch = Capacitor.isNativePlatform()
   : ((input, init) => window.fetch(input as RequestInfo, init))
 
 /* ------------------------------------------------------------------ */
-/* WebDAV（手机端上传明文 JSON；恢复支持明文与 TTENC1/TTENC2 加密备份）     */
+/* WebDAV（与桌面端互通：TTENC2 + 内容寻址 blobs + 手动/自动上传）          */
 /* ------------------------------------------------------------------ */
 
 function remoteFileUrl(settings: WebDAVSettings): string {
-  const base = settings.url.trim().replace(/\/+$/, '')
-  if (!base) throw new Error('请填写 WebDAV 服务器地址')
-  const remotePath = settings.remotePath.trim().replace(/^\/+/, '')
+  const input = settings.url.trim()
+  if (!input) throw new Error('请填写 WebDAV 服务器地址')
+  let base: URL
+  try {
+    base = new URL(input)
+  } catch {
+    throw new Error('WebDAV 服务器地址格式不正确')
+  }
+  if (base.protocol !== 'http:' && base.protocol !== 'https:') throw new Error('WebDAV 地址必须使用 http 或 https')
+  if (!base.pathname.endsWith('/')) base.pathname += '/'
+  const remotePath = settings.remotePath.trim()
   if (!remotePath) throw new Error('请填写远端文件路径')
-  return `${base}/${remotePath}`
+  if (/^https?:\/\//i.test(remotePath)) return new URL(remotePath).toString()
+  return new URL(remotePath.replace(/^\/+/, ''), base).toString()
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  const chunks: string[] = []
+  for (let i = 0; i < bytes.length; i += 32768) {
+    chunks.push(String.fromCharCode(...bytes.subarray(i, i + 32768)))
+  }
+  return btoa(chunks.join(''))
 }
 
 function authHeaders(settings: WebDAVSettings): Record<string, string> {
   if (!settings.username && !settings.password) return {}
-  return { Authorization: `Basic ${btoa(`${settings.username}:${settings.password}`)}` }
+  return { Authorization: `Basic ${bytesToBase64(new TextEncoder().encode(`${settings.username}:${settings.password}`))}` }
 }
+
+/** Android 7 也需原样写入二进制，不能通过 CapacitorHttp 把密文转成 UTF-8。 */
+const binaryPlugin = Capacitor.isNativePlatform()
+  ? registerPlugin<{
+      put(options: { url: string; data: string; headers: Record<string, string> }): Promise<{ status: number }>
+      request(options: { url: string; method: 'MKCOL' | 'PROPFIND'; data?: string; headers: Record<string, string> }): Promise<{ status: number; data: string }>
+    }>('TomatoWebDAVBinary')
+  : null
 
 /** CapacitorHttp 的 arraybuffer 响应在 Android 上是 base64 字符串；
  * Content-Type: application/json 时原生插件会直接解析成对象。不要把加密
@@ -370,40 +397,195 @@ async function testWebDAV(settings: WebDAVSettings): Promise<WebDAVTestResult> {
   }
 }
 
-async function uploadWebDAV(): Promise<WebDAVSyncResult> {
-  const settings = state.settings.webdav
-  if (!settings.url.trim()) return { ok: false, message: '请先在设置中配置 WebDAV' }
-  if (settings.encryptionPassword.trim()) {
-    return { ok: false, message: '手机端暂不支持加密上传；请在桌面端上传，或清空加密密码后仅上传明文' }
+function parentUrl(fileUrl: string): string {
+  return new URL('.', fileUrl).toString()
+}
+
+/** 按服务器根地址逐级创建备份目录（MKCOL 405 表示目录已存在）。 */
+async function ensureRemoteDirectory(settings: WebDAVSettings, fileUrl: string): Promise<void> {
+  const base = new URL(settings.url.trim())
+  const file = new URL(fileUrl)
+  const baseParts = base.pathname.split('/').filter(Boolean)
+  const fileParts = file.pathname.split('/').filter(Boolean)
+  fileParts.pop()
+  let directories: string[]
+  if (base.origin !== file.origin || baseParts.some((part, index) => fileParts[index] !== part)) {
+    directories = [parentUrl(fileUrl)]
+  } else {
+    let path = `/${baseParts.join('/')}`
+    if (!path.endsWith('/')) path += '/'
+    directories = fileParts.slice(baseParts.length).map((part) => {
+      path += `${part}/`
+      return `${file.origin}${path}`
+    })
   }
+  for (const directory of directories) {
+    const headers = authHeaders(settings)
+    const status = binaryPlugin
+      ? (await binaryPlugin.request({ url: directory, method: 'MKCOL', headers })).status
+      : (await request(directory, { method: 'MKCOL', headers })).status
+    if (![200, 201, 204, 405].includes(status)) {
+      throw new Error(`创建 WebDAV 目录失败（HTTP ${status}）`)
+    }
+  }
+}
+
+/** 内容寻址去重：只在目录不存在或文件缺失时上传。 */
+async function listRemoteBlobs(settings: WebDAVSettings, url: string): Promise<Set<string>> {
+  const headers = { ...authHeaders(settings), Depth: '1', 'Content-Type': 'application/xml; charset=utf-8' }
+  const data = '<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/><d:getcontentlength/></d:prop></d:propfind>'
+  const response = binaryPlugin
+    ? await binaryPlugin.request({ url, method: 'PROPFIND', headers, data })
+    : await request(url, { method: 'PROPFIND', headers, body: data }).then(async (result) => ({
+        status: result.status, data: await result.text()
+      }))
+  const names = new Set<string>()
+  if (response.status < 200 || response.status >= 300) return names
+  const xml = response.data
+  for (const match of xml.matchAll(/<[^>]*D?:?href[^>]*>([^<]+)<\/[^>]*href>/gi)) {
+    const name = decodeURIComponent(match[1].split('/').filter(Boolean).pop() ?? '')
+    if (name) names.add(name)
+  }
+  return names
+}
+
+/** Android 原生插件负责二进制 PUT；浏览器预览使用标准 fetch。 */
+async function putWebDAV(
+  url: string,
+  settings: WebDAVSettings,
+  body: string | Uint8Array,
+  contentType: string
+): Promise<number> {
+  const headers = { ...authHeaders(settings), 'Content-Type': contentType }
+  if (body instanceof Uint8Array && binaryPlugin) {
+    const result = await binaryPlugin.put({ url, headers, data: bytesToBase64(body) })
+    return result.status
+  }
+  const response = await request(url, {
+    method: 'PUT',
+    headers,
+    body: typeof body === 'string' ? body : new Blob([new Uint8Array(body)])
+  })
+  return response.status
+}
+
+let autoUploadTimer: ReturnType<typeof setTimeout> | null = null
+let uploadInFlight = false
+let uploadQueued = false
+
+function scheduleWebDAVUpload(delay = 1600): void {
+  const settings = state.settings.webdav
+  if (autoUploadTimer) clearTimeout(autoUploadTimer)
+  autoUploadTimer = null
+  if (!settings.enabled || !settings.autoUpload || !settings.url.trim()) return
+  autoUploadTimer = setTimeout(() => {
+    autoUploadTimer = null
+    void uploadWebDAV()
+  }, delay)
+}
+
+async function performWebDAVUpload(settings: WebDAVSettings): Promise<WebDAVSyncResult> {
   try {
     const url = remoteFileUrl(settings)
-    const response = await request(url, {
-      method: 'PUT',
-      headers: { ...authHeaders(settings), 'Content-Type': 'application/json' },
-      body: createRemotePayload(state)
-    })
-    if (response.status >= 200 && response.status < 300) {
-      const at = new Date().toISOString()
-      state.settings = mergeSettings({ webdav: { ...settings, lastSyncAt: at, lastStatus: 'success', lastError: null } })
-      persistSoon()
-      return { ok: true, message: '已备份到 WebDAV', at }
-    }
-    if (response.status === 404 || response.status === 409) {
-      return {
-        ok: false,
-        message: '远端目录不存在，请先在电脑端的备份设置中完成一次上传以创建目录'
+    // 快照必须在任何 await 之前生成：上传中继续编辑时，后续变动由队列再上传。
+    const externalised = settings.splitAssets !== false ? externaliseAssets(state.todos) : null
+    const payload = externalised
+      ? createRemotePayloadWith(state, externalised.todos)
+      : createRemotePayload(state)
+    await ensureRemoteDirectory(settings, url)
+    let uploaded = 0
+    let reused = 0
+    if (externalised && externalised.blobs.size > 0) {
+      const blobsUrl = new URL('blobs/', parentUrl(url)).toString()
+      await ensureRemoteDirectory(settings, `${blobsUrl}placeholder`)
+      const existing = await listRemoteBlobs(settings, blobsUrl)
+      for (const [name, dataUrl] of externalised.blobs) {
+        if (existing.has(name)) {
+          // 文件名仅由内容决定，服务器可能已有另一加密密码/明文版本。
+          // 只有内容能用当前密码正确读回时才复用，避免主文件指向不可解密资源。
+          try {
+            const old = await downloadWebDAVBytes(`${blobsUrl}${name}`, authHeaders(settings))
+            if (old.status >= 200 && old.status < 300 &&
+                await decodeWebDAVBytes(old.bytes, settings.encryptionPassword) === dataUrl &&
+                Boolean(browserBackupFormatVersion(old.bytes)) === Boolean(settings.encryptionPassword)) {
+              reused += 1
+              continue
+            }
+          } catch {
+            // 不可读或密码变更：用当前配置重新上传同名资源。
+          }
+        }
+        const body = settings.encryptionPassword
+          ? await encryptBrowserBackup(dataUrl, settings.encryptionPassword)
+          : dataUrl
+        const status = await putWebDAV(
+          `${blobsUrl}${name}`, settings, body,
+          settings.encryptionPassword ? 'application/octet-stream' : 'text/plain; charset=utf-8'
+        )
+        if (status < 200 || status >= 300) {
+          return { ok: false, message: `上传附件 ${name} 失败（HTTP ${status}）` }
+        }
+        uploaded += 1
       }
     }
-    return { ok: false, message: `上传失败：HTTP ${response.status}` }
+    // 先传全部外置资源，最后写主文件；任何失败都不会更新远端主备份。
+    const body = settings.encryptionPassword
+      ? await encryptBrowserBackup(payload, settings.encryptionPassword)
+      : payload
+    const status = await putWebDAV(
+      url, settings, body,
+      settings.encryptionPassword ? 'application/octet-stream' : 'application/json; charset=utf-8'
+    )
+    if (status < 200 || status >= 300) {
+      return { ok: false, message: `上传失败：HTTP ${status}` }
+    }
+    const assetNote = externalised && externalised.blobs.size > 0
+      ? `，外置 ${externalised.blobs.size} 个图片/附件（新传 ${uploaded}、复用 ${reused}）`
+      : ''
+    return {
+      ok: true,
+      message: `${settings.encryptionPassword ? '已加密压缩保存' : '已保存'}到 WebDAV${assetNote}`,
+      at: new Date().toISOString()
+    }
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : '上传失败' }
   }
 }
 
+async function uploadWebDAV(): Promise<WebDAVSyncResult> {
+  const settings = state.settings.webdav
+  if (!settings.url.trim()) return { ok: false, message: '请先在设置中配置 WebDAV' }
+  if (uploadInFlight) {
+    uploadQueued = true
+    return { ok: true, message: '正在同步，稍后将自动保存最新数据' }
+  }
+  uploadInFlight = true
+  let result: WebDAVSyncResult
+  try {
+    result = await performWebDAVUpload(settings)
+  } finally {
+    uploadInFlight = false
+  }
+  state.settings = mergeSettings({ webdav: {
+    ...state.settings.webdav,
+    lastStatus: result.ok ? 'success' : 'error',
+    lastError: result.ok ? null : result.message,
+    lastSyncAt: result.ok ? result.at ?? new Date().toISOString() : state.settings.webdav.lastSyncAt
+  } })
+  emit()
+  if (uploadQueued) {
+    uploadQueued = false
+    setTimeout(() => { void uploadWebDAV() }, 500)
+  }
+  return result
+}
+
 async function restoreWebDAV(): Promise<WebDAVSyncResult> {
   const settings = state.settings.webdav
   if (!settings.url.trim()) return { ok: false, message: '请先在设置中配置 WebDAV' }
+  if (uploadInFlight) return { ok: false, message: '正在上传，请稍后再恢复远端备份' }
+  if (autoUploadTimer) clearTimeout(autoUploadTimer)
+  autoUploadTimer = null
   try {
     const url = remoteFileUrl(settings)
     const response = await downloadWebDAVBytes(url, authHeaders(settings))
@@ -447,7 +629,20 @@ async function restoreWebDAV(): Promise<WebDAVSyncResult> {
       }))
       if (missing > 0) assetsNote = `，${missing} 个图片/附件下载失败`
     }
-    state = normaliseState({ groups: payload.groups, todos, settings: state.settings })
+    state = normaliseState({
+      groups: payload.groups,
+      todos,
+      settings: {
+        ...state.settings,
+        webdav: {
+          ...state.settings.webdav,
+          lastStatus: 'success',
+          lastSyncAt: new Date().toISOString(),
+          lastError: null
+        }
+      }
+    })
+    // 恢复不触发自动上传：避免把刚下载的数据立即覆盖回远端。
     emit()
     await persistNow()
     return {
@@ -705,6 +900,9 @@ export function createCapacitorApi(): TomatoAPI {
     }),
     resetApp: async (): Promise<ResetResult> => {
       await loadState()
+      if (autoUploadTimer) clearTimeout(autoUploadTimer)
+      autoUploadTimer = null
+      uploadQueued = false
       state = createDefaultState()
       emit()
       await persistNow()

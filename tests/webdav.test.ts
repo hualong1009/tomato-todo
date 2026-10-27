@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { encryptBackup } from '../src/main/backupCrypto'
+import { decryptBackup, encryptBackup } from '../src/main/backupCrypto'
 import { createDefaultState } from '../src/main/persistence'
 import {
   buildRemoteFileUrl,
@@ -322,6 +322,7 @@ describe('WebDAV 图片/附件拆分同步', () => {
           { status: 207 }
         )
       }
+      if (call.method === 'GET' && call.url.includes('/blobs/')) return new Response(PNG, { status: 200 })
       return new Response(null, { status: 201 })
     })
 
@@ -329,6 +330,26 @@ describe('WebDAV 图片/附件拆分同步', () => {
     expect(result.ok).toBe(true)
     expect(result.message).toContain('复用 1')
     expect(calls.filter((call) => call.method === 'PUT' && call.url.includes('/blobs/'))).toHaveLength(0)
+  })
+
+  it('加密密码变更时重传已有 blob，保证双端可恢复', async () => {
+    const state = stateWithImage()
+    const { blobs } = (await import('../src/main/blobSync')).externaliseAssets(state.todos)
+    const existingName = [...blobs.keys()][0]
+    const calls = mockFetch((call) => {
+      if (call.method === 'PROPFIND' && call.url.includes('/blobs/')) {
+        return new Response(`<d:href>/blobs/${existingName}</d:href>`, { status: 207 })
+      }
+      if (call.method === 'GET' && call.url.includes('/blobs/')) {
+        return new Response(encryptBackup(PNG, '旧密码'), { status: 200 })
+      }
+      return new Response(null, { status: 201 })
+    })
+    const result = await uploadToWebDAV(settings({ encryptionPassword: '新密码' }), state)
+    expect(result.ok).toBe(true)
+    const blobPut = calls.find((call) => call.method === 'PUT' && call.url.includes('/blobs/'))
+    expect(blobPut?.rawBody).toBeDefined()
+    expect(decryptBackup(Buffer.from(blobPut!.rawBody!), '新密码')).toBe(PNG)
   })
 
   it('恢复时下载 blobs 并回填成内嵌图片', async () => {

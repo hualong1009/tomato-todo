@@ -256,8 +256,26 @@ async function uploadAssets(
   let reused = 0
   for (const [name, dataUrl] of blobs) {
     if (existing.has(name)) {
-      reused += 1
-      continue
+      // 同一内容寻址文件可能曾用其他密码（或明文）上传。
+      // 只复用当前设置能正确读回的文件，否则重新加密同名 blob。
+      try {
+        const previous = await transferRequest(() => fetchImpl(`${blobsUrl}${name}`, {
+          method: 'GET',
+          headers: authHeaders(settings),
+          signal: AbortSignal.timeout(TRANSFER_TIMEOUT_MS)
+        }))
+        if (previous.ok) {
+          const bytes = Buffer.from(await previous.arrayBuffer())
+          const encrypted = isEncryptedBackup(bytes)
+          const text = encrypted ? decryptBackup(bytes, settings.encryptionPassword) : bytes.toString('utf8')
+          if (encrypted === encrypting && text === dataUrl) {
+            reused += 1
+            continue
+          }
+        }
+      } catch {
+        // 旧文件不能解密/读取时重传，避免主备份引用错误加密版本。
+      }
     }
     const body: Buffer | string = encrypting
       ? encryptBackup(dataUrl, settings.encryptionPassword)

@@ -1,7 +1,7 @@
 import { createCipheriv, randomBytes, scryptSync } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { browserBackupFormatVersion, decryptBrowserBackup } from '../src/shared/browserBackupCrypto'
-import { encryptBackup } from '../src/main/backupCrypto'
+import { browserBackupFormatVersion, decryptBrowserBackup, encryptBrowserBackup } from '../src/shared/browserBackupCrypto'
+import { decryptBackup, encryptBackup } from '../src/main/backupCrypto'
 
 const PASSWORD = '正确密码 🍅'
 const PLAIN = JSON.stringify({ groups: [], todos: [{ title: '跨设备同步 🔐' }] })
@@ -14,7 +14,17 @@ function encryptLegacy(text: string): Buffer {
   return Buffer.concat([Buffer.from('TTENC1'), salt, iv, cipher.getAuthTag(), body])
 }
 
-describe('浏览器解密桌面端 WebDAV 备份', () => {
+describe('浏览器与桌面端 TTENC2 互通', () => {
+  it('手机端生成的加密备份可由桌面端解密，随机盐保证每次密文不同', async () => {
+    const a = await encryptBrowserBackup(PLAIN, PASSWORD)
+    const b = await encryptBrowserBackup(PLAIN, PASSWORD)
+    expect(browserBackupFormatVersion(a)).toBe(2)
+    expect(decryptBackup(a, PASSWORD)).toBe(PLAIN)
+    expect(decryptBackup(b, PASSWORD)).toBe(PLAIN)
+    expect(a).not.toEqual(b)
+    expect(() => decryptBackup(a, '错误密码')).toThrow('解密失败')
+  })
+
   it('解密桌面端生成的 TTENC2（gzip + scrypt + AES-GCM）', async () => {
     const data = encryptBackup(PLAIN, PASSWORD)
     expect(browserBackupFormatVersion(data)).toBe(2)
