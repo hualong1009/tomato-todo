@@ -41,7 +41,9 @@ export function TomatoIcon({ size = 18, className, ...props }: IconProps) {
 
 export const CheckIcon = (props: IconProps) => (
   <svg {...base(props)}>
-    <path d="m5 12 4 4L19 6" />
+    {/* 路径含圆头笔帽的纵向范围原为 5.36–16.9（中点 11.13），
+        比 24 视口中线高约 0.87，下移后在勾选框中垂直居中（#2） */}
+    <path d="m5 12.9 4 4L19 6.9" />
   </svg>
 )
 
