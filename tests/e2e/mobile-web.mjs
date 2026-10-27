@@ -50,6 +50,11 @@ try {
     origin: `http://127.0.0.1:${port}`
   })
   const page = await context.newPage()
+  const { version: currentVersion } = JSON.parse(await readFile(resolve('package.json'), 'utf8'))
+  let remoteVersion = currentVersion
+  await page.route('https://api.github.com/repos/hualong1009/tomato-todo/releases/latest', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tag_name: `v${remoteVersion}` }) })
+  )
   await page.goto(`http://127.0.0.1:${port}/`)
   await page.waitForSelector('.mobile-shell')
 
@@ -191,7 +196,34 @@ try {
   })
   const clipboard = await page.evaluate(() => navigator.clipboard.readText())
   check('导出 Markdown 到剪贴板', clipboard.includes('## ') && clipboard.includes('移动端任务'))
+
+  // 重启后自动检测新版本 → 忽略此版本 → 下次启动不再弹出；手动检查仍可查看。
+  remoteVersion = currentVersion.replace(/\d+$/, (patch) => String(Number(patch) + 1))
   await page.click('[data-testid="modal-close"]')
+  await page.reload()
+  await page.waitForSelector('[data-testid="update-dialog"]', { timeout: 10000 })
+  check('启动后自动发现新版本', (await page.locator('[data-testid="update-dialog"]').innerText()).includes(remoteVersion))
+  await page.click('[data-testid="update-ignore"]')
+  await page.waitForSelector('[data-testid="update-dialog"]', { state: 'detached' })
+  await page.waitForFunction((version) =>
+    window.localStorage.getItem('CapacitorStorage.tomato-todo-data')?.includes(`"ignoredUpdateVersion":"${version}"`),
+    remoteVersion
+  )
+  await page.reload()
+  await page.waitForSelector('.mobile-shell')
+  await page.waitForTimeout(2200)
+  check('重启后忽略的版本不再弹窗', (await page.locator('[data-testid="update-dialog"]').count()) === 0)
+  await page.click('[data-testid="mobile-tab-settings"]')
+  await page.click('[data-testid="settings-tab-about"]')
+  await page.click('[data-testid="setting-check-updates"]')
+  await page.waitForSelector('[data-testid="update-dialog"]')
+  check('手动检查可重新查看忽略的版本', true)
+  await page.evaluate(() => {
+    window.open = (url) => { window.__lastUpdateUrl = url; return null }
+  })
+  await page.click('[data-testid="update-open-release"]')
+  check('去更新打开本项目发布页', (await page.evaluate(() => window.__lastUpdateUrl)) ===
+    'https://github.com/hualong1009/tomato-todo/releases/latest')
 
   console.log('Mobile web smoke passed')
 } finally {

@@ -63,6 +63,17 @@
   width: min(420px, 100%);
 }
 
+.update-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.update-body > svg { color: var(--accent); }
+.update-body strong { font-size: 15px; color: var(--ink); }
+.update-body p { margin: 0; color: var(--muted); line-height: 1.65; }
+
 .text-input {
   width: 100%;
   height: 39px;

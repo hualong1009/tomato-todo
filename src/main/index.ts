@@ -56,6 +56,7 @@ import {
 import { hashPassword, verifyPassword } from './security'
 import { AppStore, type SettingsPatch } from './store'
 import { testWebDAV } from './webdav'
+import { evaluateRelease, LATEST_RELEASE_API } from '../shared/updates'
 
 const isMcpMode = process.argv.includes('--mcp')
 if (process.env.TOMATO_USER_DATA) {
@@ -832,6 +833,22 @@ function registerIpc(): void {
 
   ipcMain.handle('app:open-external', async (_event, url: string) => {
     if (/^https?:\/\//i.test(url)) await shell.openExternal(url)
+  })
+
+  ipcMain.handle('app:check-updates', async () => {
+    try {
+      const response = await appFetch(LATEST_RELEASE_API, {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          'User-Agent': `tomato-todo/${app.getVersion()}`
+        },
+        signal: AbortSignal.timeout(10000)
+      })
+      if (!response.ok) return { status: 'error', message: `更新检查失败（HTTP ${response.status}）` }
+      return evaluateRelease(await response.json(), app.getVersion())
+    } catch {
+      return { status: 'error', message: '无法连接 GitHub，请检查网络后重试' }
+    }
   })
 
   ipcMain.handle('window:minimize', (event) => {

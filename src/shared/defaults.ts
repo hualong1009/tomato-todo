@@ -100,7 +100,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   general: {
     hotkey: 'CommandOrControl+Shift+Space',
     theme: 'system',
-    closeToTray: true
+    closeToTray: true,
+    ignoredUpdateVersion: null
   },
   webdav: {
     enabled: false,

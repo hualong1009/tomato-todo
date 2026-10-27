@@ -10,6 +10,7 @@ import type {
   UpdateTodoPatch
 } from '@shared/types'
 import { isOverdue, STATUS_META } from '@shared/todoUtils'
+import { RELEASES_URL } from '@shared/updates'
 import { AIPanel } from './components/AIPanel'
 import { ConfirmDialog, NameDialog, Toast, type ToastState } from './components/Dialogs'
 import { ContextMenu, type MenuItem } from './components/ContextMenu'
@@ -48,6 +49,7 @@ import { Sidebar, type ViewKey } from './components/Sidebar'
 import { TitleBar } from './components/TitleBar'
 import { TodoComposer } from './components/TodoComposer'
 import { TodoList, type TodoSection } from './components/TodoList'
+import { UpdateDialog } from './components/UpdateDialog'
 import { cleanError, formatClock } from './utils/format'
 
 interface ConfirmState {
@@ -91,6 +93,8 @@ export default function App() {
   const [now, setNow] = useState(Date.now())
   const [aiOpen, setAiOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [availableUpdate, setAvailableUpdate] = useState<string | null>(null)
+  const updateChecked = useRef(false)
   const [toast, setToast] = useState<ToastState | null>(null)
   const [context, setContext] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null)
   const [groupDialog, setGroupDialog] = useState<GroupDialogState | null>(null)
@@ -115,6 +119,25 @@ export default function App() {
     },
     []
   )
+
+  const checkUpdates = useCallback(async (manual: boolean) => {
+    try {
+      const result = await window.api.checkForUpdates()
+      if (result.status === 'available') {
+        if (manual || result.version !== stateRef.current?.settings.general.ignoredUpdateVersion) {
+          if (manual) setSettingsOpen(false)
+          setAvailableUpdate(result.version)
+        }
+      } else if (manual) {
+        showToast(
+          result.status === 'up-to-date' ? '当前已是最新版本' : result.message,
+          result.status === 'error' ? 'error' : 'success'
+        )
+      }
+    } catch {
+      if (manual) showToast('无法连接 GitHub，请检查网络后重试', 'error')
+    }
+  }, [showToast])
 
   const runAction = useCallback(
     async (action: () => Promise<AppState>): Promise<boolean> => {
@@ -151,6 +174,17 @@ export default function App() {
       unsubscribeSecurity()
     }
   }, [showToast])
+
+  // 每次启动只检查一次；离线/限流时静默失败。锁定状态下不弹出更新提示。
+  useEffect(() => {
+    if (!state || !security || security.locked || updateChecked.current) return
+    const timer = window.setTimeout(() => {
+      if (updateChecked.current) return
+      updateChecked.current = true
+      void checkUpdates(false)
+    }, 1800)
+    return () => window.clearTimeout(timer)
+  }, [Boolean(state), security?.locked, checkUpdates])
 
   // 上报用户活动，主进程据此计算空闲自动锁定
   const lastActivitySent = useRef(0)
@@ -1036,6 +1070,7 @@ export default function App() {
         onClose={() => setSettingsOpen(false)}
         onSave={saveSettings}
         onToast={showToast}
+        onCheckUpdates={() => checkUpdates(true)}
       />
 
       {pomodoro && pomodoroOpen && (
@@ -1089,6 +1124,34 @@ export default function App() {
         onConfirm={async () => {
           if (!confirm) return
           await confirm.action()
+        }}
+      />
+
+      <UpdateDialog
+        version={availableUpdate}
+        onClose={() => setAvailableUpdate(null)}
+        onIgnore={async () => {
+          if (!availableUpdate || !stateRef.current) return
+          try {
+            const result = await window.api.updateSettings({
+              general: {
+                ...stateRef.current.settings.general,
+                ignoredUpdateVersion: availableUpdate
+              }
+            })
+            setState(result.state)
+            setAvailableUpdate(null)
+          } catch (error) {
+            showToast(cleanError(error), 'error')
+          }
+        }}
+        onOpenRelease={async () => {
+          try {
+            await window.api.openExternal(RELEASES_URL)
+            setAvailableUpdate(null)
+          } catch (error) {
+            showToast(cleanError(error), 'error')
+          }
         }}
       />
 

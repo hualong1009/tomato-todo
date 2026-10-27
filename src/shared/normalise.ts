@@ -277,6 +277,11 @@ export function normaliseState(raw: unknown): AppState {
   settings.webdav.lastError =
     typeof settings.webdav.lastError === 'string' ? settings.webdav.lastError : null
   settings.general.closeToTray = settings.general.closeToTray !== false
+  settings.general.ignoredUpdateVersion =
+    typeof settings.general.ignoredUpdateVersion === 'string' &&
+    /^\d+\.\d+\.\d+$/.test(settings.general.ignoredUpdateVersion)
+      ? settings.general.ignoredUpdateVersion
+      : null
   settings.localBackup.password = String(settings.localBackup.password ?? '')
   settings.localBackup.lastBackupAt =
     typeof settings.localBackup.lastBackupAt === 'string' ? settings.localBackup.lastBackupAt : null
