@@ -4,6 +4,7 @@ import { URGENCY_META } from '@shared/defaults'
 import type { Group, Todo } from '@shared/types'
 import { getTodoStatus, isOverdue, STATUS_META } from '@shared/todoUtils'
 import { todoStatusText, formatDateTime, formatDue, markdownExcerpt } from '../utils/format'
+import { isMobile } from '../platform'
 import {
   AlertIcon,
   CalendarIcon,
@@ -205,17 +206,19 @@ export function TodoItem({
                 进行中
               </span>
             )}
-            <button
-              className={`action-btn pin ${todo.pinned ? 'active' : ''}`}
-              title={todo.pinned ? '取消桌面便签' : '固定到桌面便签'}
-              onClick={(event) => {
-                event.stopPropagation()
-                onPin(todo)
-              }}
-              data-testid="todo-pin"
-            >
-              <PinIcon size={15} filled={todo.pinned} />
-            </button>
+            {!isMobile && (
+              <button
+                className={`action-btn pin ${todo.pinned ? 'active' : ''}`}
+                title={todo.pinned ? '取消桌面便签' : '固定到桌面便签'}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onPin(todo)
+                }}
+                data-testid="todo-pin"
+              >
+                <PinIcon size={15} filled={todo.pinned} />
+              </button>
+            )}
             <button
               className="action-btn tomato"
               title="开始番茄专注"

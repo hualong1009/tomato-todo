@@ -117,6 +117,7 @@ try {
     '新增待办成功',
     (await page.locator('[data-testid="todo-item"] .todo-title').first().innerText()).includes('移动端任务')
   )
+  check('手机待办卡片没有桌面便签按钮', (await page.locator('[data-testid="todo-pin"]').count()) === 0)
 
   // 本地持久化（刷新后仍在）
   await page.waitForFunction(() => Boolean(window.localStorage.getItem('CapacitorStorage.tomato-todo-data')))
@@ -130,6 +131,9 @@ try {
   const detail = await page.locator('[data-testid="detail-panel"]').boundingBox()
   check('详情面板全屏显示', Boolean(detail && detail.width >= 380 && detail.height >= 700))
   check('详情默认是 Markdown 预览', (await page.locator('[data-testid="detail-content-view"]').count()) === 1)
+  check('手机详情不显示固定便签和桌面便签样式',
+    (await page.locator('[data-testid="detail-pin"]').count()) === 0 &&
+    (await page.locator('.detail-note-style').count()) === 0)
   await page.click('[data-testid="detail-edit"]')
   await page.waitForSelector('[data-testid="rich-tool-bold"]')
   check('富文本工具栏存在', (await page.locator('[data-testid="rich-tool-bold"]').count()) === 1)
@@ -166,6 +170,8 @@ try {
   await page.click('[data-testid="todo-more"]')
   await page.waitForSelector('.action-sheet')
   check('右键菜单渲染为操作面板', (await page.locator('[data-testid="context-cancel"]').count()) === 1)
+  check('手机操作面板不显示固定到桌面便签',
+    !(await page.locator('.action-sheet').innerText()).includes('桌面便签'))
   await page.click('[data-testid="context-cancel"]')
 
   // 设置：隐藏桌面专属标签，提供本地备份入口
