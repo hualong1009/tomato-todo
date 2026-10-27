@@ -88,20 +88,27 @@ public class ThemePlugin extends Plugin {
             });
         }
         JSObject ret = new JSObject();
-        ret.put("top", lastTop);
-        ret.put("bottom", lastBottom);
-        ret.put("left", lastLeft);
-        ret.put("right", lastRight);
+        ret.put("top", toCssPx(lastTop));
+        ret.put("bottom", toCssPx(lastBottom));
+        ret.put("left", toCssPx(lastLeft));
+        ret.put("right", toCssPx(lastRight));
         call.resolve(ret);
     }
 
     private void dispatchSafeArea() {
         JSObject data = new JSObject();
-        data.put("top", lastTop);
-        data.put("bottom", lastBottom);
-        data.put("left", lastLeft);
-        data.put("right", lastRight);
+        data.put("top", toCssPx(lastTop));
+        data.put("bottom", toCssPx(lastBottom));
+        data.put("left", toCssPx(lastLeft));
+        data.put("right", toCssPx(lastRight));
         notifyListeners("safeArea", data);
+    }
+
+    /** 原生 insets 是物理像素，Web/CSS 的 px 是逻辑像素，必须除以屏幕密度 */
+    private int toCssPx(int physicalPx) {
+        float density = getContext().getResources().getDisplayMetrics().density;
+        if (density <= 0f) return physicalPx;
+        return Math.round(physicalPx / density);
     }
 
     static void applyToWindow(Activity activity, boolean isLight) {

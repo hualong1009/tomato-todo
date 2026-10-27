@@ -586,6 +586,8 @@
   width: 100%;
   height: 100%;
   max-height: 100%;
+  /* 全屏面板：标题/关闭按钮要避开状态栏 */
+  padding-top: var(--safe-top, 0px);
 }
 
 .mobile-app .settings-layout {
@@ -639,6 +641,9 @@
 .mobile-app .ai-panel {
   width: 100vw;
   max-width: 100vw;
+  /* 全屏面板：关闭按钮等顶部内容要避开状态栏 */
+  padding-top: var(--safe-top, 0px);
+  padding-bottom: var(--safe-bottom, 0px);
 }
 
 /* ---------- 番茄钟迷你条 ---------- */
