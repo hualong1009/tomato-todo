@@ -49,23 +49,20 @@ jobs:
 
       - name: 写入签名信息
         run: |
-          mkdir -p $HOME/keystore
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > $HOME/keystore/tomato-todo-release.keystore
+          set -euo pipefail
+          mkdir -p "$HOME/keystore"
+          printf '%s' '${{ secrets.KEYSTORE_BASE64 }}' | base64 -d > "$HOME/keystore/tomato-todo-release.keystore"
+          test -s "$HOME/keystore/tomato-todo-release.keystore"
           cat > android/release-signing.properties <<EOF
           storeFile=$HOME/keystore/tomato-todo-release.keystore
           storePassword=${{ secrets.KEYSTORE_PASSWORD }}
           keyAlias=${{ secrets.KEY_ALIAS }}
           keyPassword=${{ secrets.KEYSTORE_PASSWORD }}
           EOF
-          # build.gradle 读取的是固定路径 D:/OneDrive/...（本机约定），CI 上改写成相对路径
-          python3 - <<'EOF'
-          import io
-          p = 'android/app/build.gradle'
-          s = io.open(p, encoding='utf-8').read()
-          s = s.replace("rootProject.file('D:/OneDrive/Private/keystore/todolist/release-signing.properties')",
-                        "rootProject.file('../release-signing.properties')")
-          io.open(p, 'w', encoding='utf-8', newline='\n').write(s)
-          EOF
+          chmod 600 android/release-signing.properties "$HOME/keystore/tomato-todo-release.keystore"
+          # 使用绝对路径；不能用 rootProject.file('../...')（那是仓库根目录，
+          # 不是 android/，会静默回退成每次不同的 debug 签名）。
+          echo "TOMATO_RELEASE_SIGNING_PROPERTIES=$GITHUB_WORKSPACE/android/release-signing.properties" >> "$GITHUB_ENV"
 
       - name: 构建 release APK
         working-directory: android
@@ -79,10 +76,22 @@ jobs:
           cp android/app/build/outputs/apk/release/app-release.apk "tomato-todo-v${VERSION}-release.apk"
           ls -la tomato-todo-v*-release.apk
 
-      - name: 校验签名
+      - name: 校验正式签名（必须与 Secret 中 keystore 一致）
         run: |
-          BUILD_TOOLS=$(ls -d $ANDROID_HOME/build-tools/* | sort | tail -1)
-          "$BUILD_TOOLS/apksigner" verify --print-certs "tomato-todo-v${GITHUB_REF_NAME#v}-release.apk" | head -3
+          set -euo pipefail
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          APK="tomato-todo-v${GITHUB_REF_NAME#v}-release.apk"
+          CERTS=$("$BUILD_TOOLS/apksigner" verify --print-certs "$APK")
+          ACTUAL=$(printf '%s\n' "$CERTS" | awk -F': ' '/certificate SHA-256 digest:/{print $2; exit}')
+          EXPECTED=$(keytool -exportcert \
+            -keystore "$HOME/keystore/tomato-todo-release.keystore" \
+            -alias '${{ secrets.KEY_ALIAS }}' \
+            -storepass '${{ secrets.KEYSTORE_PASSWORD }}' 2>/dev/null | sha256sum | cut -d' ' -f1)
+          if [ -z "$ACTUAL" ] || [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo 'ERROR: APK signing certificate does not match the release keystore; refusing to publish.' >&2
+            exit 1
+          fi
+          echo "Release APK certificate SHA-256 verified: $ACTUAL"
 
       - name: 发布产物与说明
         uses: ./.github/actions/publish-release
