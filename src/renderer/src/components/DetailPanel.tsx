@@ -3,6 +3,7 @@ import { STICKY_COLORS, URGENCY_META } from '@shared/defaults'
 import type { AppState, Attachment, Todo, UpdateTodoPatch, Urgency } from '@shared/types'
 import { formatBytes } from '@shared/attachments'
 import { fileToAttachment } from '../utils/attachmentFile'
+import { isMobile } from '../platform'
 import { getTodoStatus, STATUS_META } from '@shared/todoUtils'
 import {
   formatDateTime,
@@ -394,7 +395,7 @@ export function DetailPanel({
               </button>
             </>
           )}
-          {!archived && (
+          {!isMobile && !archived && (
             <button
               className={`btn ghost ${todo.pinned ? 'active' : ''}`}
               onClick={() => onPin(todo)}
@@ -503,38 +504,40 @@ export function DetailPanel({
           </div>
         </div>
 
-        <div className="detail-note-style">
-          <div className="section-mini-title">
-            <PaletteIcon size={15} />
-            桌面便签样式
-            {group && <span className="muted">· {group.name}</span>}
-          </div>
-          <div className="swatch-row">
-            {STICKY_COLORS.map((color) => (
-              <button
-                key={color}
-                className={`swatch ${todo.stickyColor === color ? 'selected' : ''}`}
-                style={{ background: color }}
-                onClick={() => void patch({ stickyColor: color })}
-                title={color}
+        {!isMobile && (
+          <div className="detail-note-style">
+            <div className="section-mini-title">
+              <PaletteIcon size={15} />
+              桌面便签样式
+              {group && <span className="muted">· {group.name}</span>}
+            </div>
+            <div className="swatch-row">
+              {STICKY_COLORS.map((color) => (
+                <button
+                  key={color}
+                  className={`swatch ${todo.stickyColor === color ? 'selected' : ''}`}
+                  style={{ background: color }}
+                  onClick={() => void patch({ stickyColor: color })}
+                  title={color}
+                  disabled={archived}
+                />
+              ))}
+            </div>
+            <label className="opacity-field">
+              <span>透明度</span>
+              <input
+                type="range"
+                min="25"
+                max="100"
+                value={Math.round(todo.stickyOpacity * 100)}
                 disabled={archived}
+                onChange={(event) => void patch({ stickyOpacity: Number(event.target.value) / 100 })}
               />
-            ))}
+              <strong>{Math.round(todo.stickyOpacity * 100)}%</strong>
+            </label>
+            <p className="detail-hint">每个便签独立保存背景颜色和透明度。</p>
           </div>
-          <label className="opacity-field">
-            <span>透明度</span>
-            <input
-              type="range"
-              min="25"
-              max="100"
-              value={Math.round(todo.stickyOpacity * 100)}
-              disabled={archived}
-              onChange={(event) => void patch({ stickyOpacity: Number(event.target.value) / 100 })}
-            />
-            <strong>{Math.round(todo.stickyOpacity * 100)}%</strong>
-          </label>
-          <p className="detail-hint">每个便签独立保存背景颜色和透明度。</p>
-        </div>
+        )}
       </div>
     </aside>
   )

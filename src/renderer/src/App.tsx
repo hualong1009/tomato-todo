@@ -343,6 +343,7 @@ export default function App() {
   }
 
   const pinTodo = async (todo: Todo) => {
+    if (isMobile) return // 桌面便签窗口仅在 Electron 中存在
     const ok = await runAction(() => window.api.setPinned(todo.id, !todo.pinned))
     if (ok) showToast(todo.pinned ? '已取消桌面便签' : '已固定到桌面便签', 'success')
   }
@@ -532,13 +533,17 @@ export default function App() {
           icon: <TimerIcon size={15} />,
           disabled: Boolean(todo.completedAt),
           onClick: () => startPomodoro(todo)
-        },
-        {
+        }
+      )
+      if (!isMobile) {
+        items.push({
           id: 'pin',
           label: todo.pinned ? '取消桌面便签' : '固定到桌面便签',
           icon: <PinIcon size={15} filled={todo.pinned} />,
           onClick: () => void pinTodo(todo)
-        },
+        })
+      }
+      items.push(
         { id: 'sep-1', type: 'separator' },
         {
           id: 'move',

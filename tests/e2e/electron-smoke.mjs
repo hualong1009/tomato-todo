@@ -35,6 +35,7 @@ try {
     (await page.locator('[data-testid="todo-item"] .todo-title').first().innerText()).trim(),
     'E2E 冒烟任务'
   )
+  assert.equal(await page.locator('[data-testid="todo-pin"]').count(), 1, '桌面端仍可固定便签')
 
   // 勾选完成并验证实际完成状态
   await page.click('[data-testid="todo-check"]')
@@ -47,6 +48,8 @@ try {
   // 打开详情面板，切换状态和分组
   await page.click('[data-testid="todo-item"]')
   await page.waitForSelector('[data-testid="detail-panel"]')
+  assert.equal(await page.locator('[data-testid="detail-pin"]').count(), 1, '桌面详情仍可固定便签')
+  assert.equal(await page.locator('.detail-note-style').count(), 1, '桌面详情仍有便签样式')
   assert.equal(
     await page.locator('[data-testid="detail-title-view"]').innerText(),
     'E2E 冒烟任务'
