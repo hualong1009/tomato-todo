@@ -8,7 +8,9 @@
 
 | 平台 | 说明 |
 | --- | --- |
-| **Windows** | [Releases](https://github.com/hualong1009/tomato-todo/releases) 页面下载 NSIS 安装包（`番茄待办-vX.Y.Z-setup.exe`） |
+| **Windows** | [Releases](https://github.com/hualong1009/tomato-todo/releases) 页面下载 NSIS 安装包（`tomato-todo-setup-X.Y.Z.exe`） |
+| **Linux** | Releases 页面下载 AppImage（免安装）/ deb / rpm（`tomato-todo-X.Y.Z-x64.*`） |
+| **macOS** | Releases 页面下载 dmg（`tomato-todo-X.Y.Z-x64/arm64.dmg`），未签名，首次运行请右键打开 |
 | **Android** | Releases 页面下载 APK（`tomato-todo-vX.Y.Z-release.apk`），正式签名可直接覆盖升级 |
 
 也可以从源码自行构建，见下方「开发与构建」与「Android 构建与版本号」。
@@ -46,11 +48,13 @@ npm install
 npm run dev        # 开发模式
 npm run build      # 类型检查 + 构建
 npm run build:win  # 构建 Windows NSIS 安装包
+npm run build:linux # 构建 Linux AppImage / deb / rpm（deb/rpm 需在 Linux/macOS 上打包）
+npm run build:mac  # 构建 macOS dmg（需在 macOS 上打包）
 npm run dev:web    # 浏览器里预览移动端布局（手机视口）
 npm run build:web  # 构建移动端 Web 资源到 dist-mobile/
 ```
 
-生成物位于 `out/`，安装包位于 `release/`（NSIS 安装器 + `win-unpacked` 免安装目录）。
+生成物位于 `out/`，安装包位于 `release/`（NSIS 安装器 + 各平台包）。CI 会在打 `v*` 标签时自动构建全部平台（见 [docs/ci.md](docs/ci.md)）。
 
 > 提示：如果项目放在 OneDrive 同步目录里，`release/` 中的文件可能被 OneDrive 锁住导致打包失败（EPERM/EBUSY）。
 > 可以把输出目录指到本地磁盘：

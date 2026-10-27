@@ -1,6 +1,7 @@
 {
   "name": "tomato-todo",
   "version": "1.2.3",
+  "desktopName": "tomato-todo",
   "description": "番茄待办 - 桌面待办、分组、桌面便签、番茄钟与 AI 回顾",
   "main": "./out/main/index.js",
   "author": "Tomato Todo",
@@ -21,7 +22,9 @@
     "android:sync": "npm run build:web && npm run version:sync && cap sync android",
     "android:open": "cap open android",
     "android:run": "npm run build:web && cap run android",
-    "android:icons": "node scripts/build-android-icons.mjs"
+    "android:icons": "node scripts/build-android-icons.mjs",
+    "build:linux": "npm run build && electron-builder --linux --publish never",
+    "build:mac": "npm run build && electron-builder --mac --publish never"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
@@ -78,6 +81,63 @@
     },
     "asarUnpack": [
       "out/mcp-entry.cjs"
-    ]
+    ],
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Office",
+      "maintainer": "hualong1009",
+      "description": "番茄待办：集待办清单、番茄钟、桌面便签与 AI 回顾于一体的效率工具。",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "rpm",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "tomato-todo-${version}-${arch}.${ext}"
+    },
+    "appImage": {
+      "artifactName": "tomato-todo-${version}-${arch}.AppImage",
+      "category": "Office"
+    },
+    "deb": {
+      "packageName": "tomato-todo",
+      "synopsis": "番茄待办：待办清单、番茄钟与 AI 回顾",
+      "artifactName": "tomato-todo_${version}_${arch}.deb"
+    },
+    "rpm": {
+      "packageName": "tomato-todo",
+      "artifactName": "tomato-todo-${version}-${arch}.rpm"
+    },
+    "mac": {
+      "icon": "build/icon.png",
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "artifactName": "tomato-todo-${version}-${arch}.${ext}"
+    },
+    "dmg": {
+      "artifactName": "tomato-todo-${version}-${arch}.dmg"
+    }
   }
 }
