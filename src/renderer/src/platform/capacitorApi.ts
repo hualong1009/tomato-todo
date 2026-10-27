@@ -5,7 +5,7 @@
  * 没有主进程，因此这里用同一份共享业务逻辑 + Preferences 存储实现相同接口，
  * 让渲染端组件完全不需要区分平台。
  */
-import { Capacitor, CapacitorHttp } from '@capacitor/core'
+import { Capacitor, CapacitorHttp, registerPlugin } from '@capacitor/core'
 import { Preferences } from '@capacitor/preferences'
 import type { TomatoAPI } from '../../../shared/api'
 import { callAIChat, listAIModels, testAIConnection } from '../../../shared/aiClient'
@@ -28,6 +28,7 @@ import {
 import { buildExportMarkdown } from '../../../shared/markdownExport'
 import { splitDataUrl } from '../../../shared/attachments'
 import { collectBlobRefs, inlineAttachmentRefs, inlineBlobRefs } from '../../../shared/blobRefs'
+import { buildWidgetSummary } from '../../../shared/widget'
 import { buildSummaryContext } from '../../../shared/summary'
 import type {
   AddTodoInput,
@@ -64,6 +65,40 @@ const stateListeners = new Set<(state: AppState) => void>()
 const eventListeners = new Set<(event: AppEvent) => void>()
 
 let state: AppState = createDefaultState()
+
+/**
+ * 桌面小组件通道：原生侧插件负责把摘要写进 SharedPreferences 并刷新 RemoteViews。
+ * 非原生环境（浏览器预览）没有这个插件，调用会被静默忽略。
+ */
+const widgetPlugin = Capacitor.isNativePlatform()
+  ? registerPlugin<{ update(options: { summary: string }): Promise<void> }>('TomatoWidget')
+  : null
+
+/**
+ * 系统栏外观通道：让状态栏/手势条跟随应用主题（透明沉浸式 + 图标明暗）。
+ */
+const themePlugin = Capacitor.isNativePlatform()
+  ? registerPlugin<{ apply(options: { scheme: string }): Promise<void> }>('TomatoTheme')
+  : null
+let lastScheme: string | null = null
+
+function syncTheme(): void {
+  if (!themePlugin) return
+  const scheme = state.settings.general.theme === 'light' ? 'light' : 'dark'
+  if (scheme === lastScheme) return
+  lastScheme = scheme
+  void themePlugin.apply({ scheme }).catch(() => undefined)
+}
+
+function syncWidget(): void {
+  if (!widgetPlugin) return
+  try {
+    const summary = JSON.stringify(buildWidgetSummary(state))
+    void widgetPlugin.update({ summary }).catch(() => undefined)
+  } catch {
+    /* 小组件刷新失败不影响主流程 */
+  }
+}
 let loadPromise: Promise<void> | null = null
 let saveTimer: number | undefined
 
@@ -73,6 +108,8 @@ function snapshot(): AppState {
 
 function emit(): void {
   persistSoon()
+  syncWidget()
+  syncTheme()
   for (const listener of stateListeners) listener(state)
 }
 
@@ -101,6 +138,8 @@ function loadState(): Promise<void> {
         } catch {
           state = createDefaultState()
         }
+        syncTheme()
+        syncWidget()
       })
       .catch(() => {
         state = createDefaultState()

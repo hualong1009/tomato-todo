@@ -32,7 +32,11 @@ vi.mock('@capacitor/core', () => ({
   },
   CapacitorHttp: {
     request: (...args: unknown[]) => h.request(...args)
-  }
+  },
+  registerPlugin: () => ({
+    update: async () => undefined,
+    apply: async () => undefined
+  })
 }))
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 5))

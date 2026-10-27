@@ -55,6 +55,11 @@ npm run build:web  # 构建移动端 Web 资源到 dist-mobile/
 - MCP：外部 Agent 可通过 stdio 搜索、新增、修改、开始、完成、归档待办、记录专注和生成 AI 回顾（`summarise_todos`，使用应用内配置的 AI 接口）。
 - 全局快捷键默认 `Ctrl+Shift+Space`，可在设置中重新录制。
 
+## 手机端（Android）
+
+- **桌面小组件**：「番茄待办 · 最近待办」显示最近更新的 5 条待办（未完成、未归档），带紧急程度色点与期望时间，右上角数量含逾期统计；点任意一行打开应用，点刷新图标立即重绘；数据变化后小组件实时刷新（渲染层写入轻量摘要，原生不解析大 JSON）。
+- **系统栏跟随主题**：状态栏与手势条改为透明沉浸式，背景就是应用主题色，图标明暗随深 / 浅主题自动切换；内容用 safe-area 顶开，不被系统栏遮挡。
+
 ## 数据与 MCP
 
 本地数据统一保存在 `%APPDATA%/tomato-todo/tomato-todo-data.json`（dev 与安装版共用同一份；安装后不会因为 productName 改变目录）。
@@ -90,7 +95,7 @@ MCP 与桌面应用共享同一数据文件；桌面端通过文件监听自动�
 ## 测试
 
 ```bash
-npm test          # 134 个单元 / 集成测试（共享逻辑、持久化、WebDAV、Store、MCP、加密、附件、外置资源、适配层）
+npm test          # 140 个单元 / 集成测试（共享逻辑、持久化、WebDAV、Store、MCP、加密、附件、外置资源、小组件摘要、适配层）
 npm run test:e2e  # 构建后跑桌面端 Electron + 移动端 Web 的 Playwright 测试
 ```
 

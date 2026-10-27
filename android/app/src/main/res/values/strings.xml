@@ -4,4 +4,6 @@
     <string name="title_activity_main">番茄待办</string>
     <string name="package_name">app.tomato.todo</string>
     <string name="custom_url_scheme">app.tomato.todo</string>
+    <string name="widget_tomato_label">番茄待办 · 最近待办</string>
+    <string name="widget_tomato_description">显示最近更新的待办，点击打开应用</string>
 </resources>

@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_bg"
+    android:padding="14dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingBottom="8dp">
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="最近待办"
+            android:textColor="#eef1ff"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:singleLine="true" />
+
+        <TextView
+            android:id="@+id/widget_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:text=""
+            android:textColor="#8f9bbf"
+            android:textSize="11sp"
+            android:singleLine="true" />
+
+        <ImageView
+            android:id="@+id/widget_refresh"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:padding="3dp"
+            android:background="@drawable/widget_icon_bg"
+            android:src="@drawable/widget_refresh_icon"
+            android:contentDescription="刷新" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_row_0"
+        style="@style/WidgetRow">
+        <ImageView android:id="@+id/widget_dot_0" style="@style/WidgetDot" />
+        <TextView android:id="@+id/widget_todo_0" style="@style/WidgetTodoTitle" />
+        <TextView android:id="@+id/widget_meta_0" style="@style/WidgetTodoMeta" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_row_1"
+        style="@style/WidgetRow">
+        <ImageView android:id="@+id/widget_dot_1" style="@style/WidgetDot" />
+        <TextView android:id="@+id/widget_todo_1" style="@style/WidgetTodoTitle" />
+        <TextView android:id="@+id/widget_meta_1" style="@style/WidgetTodoMeta" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_row_2"
+        style="@style/WidgetRow">
+        <ImageView android:id="@+id/widget_dot_2" style="@style/WidgetDot" />
+        <TextView android:id="@+id/widget_todo_2" style="@style/WidgetTodoTitle" />
+        <TextView android:id="@+id/widget_meta_2" style="@style/WidgetTodoMeta" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_row_3"
+        style="@style/WidgetRow">
+        <ImageView android:id="@+id/widget_dot_3" style="@style/WidgetDot" />
+        <TextView android:id="@+id/widget_todo_3" style="@style/WidgetTodoTitle" />
+        <TextView android:id="@+id/widget_meta_3" style="@style/WidgetTodoMeta" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_row_4"
+        style="@style/WidgetRow">
+        <ImageView android:id="@+id/widget_dot_4" style="@style/WidgetDot" />
+        <TextView android:id="@+id/widget_todo_4" style="@style/WidgetTodoTitle" />
+        <TextView android:id="@+id/widget_meta_4" style="@style/WidgetTodoMeta" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="10dp"
+        android:text="还没有待办，点这里添加"
+        android:textColor="#8f9bbf"
+        android:textSize="12sp"
+        android:visibility="gone" />
+</LinearLayout>
