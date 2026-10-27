@@ -331,36 +331,32 @@ function authHeaders(settings: WebDAVSettings): Record<string, string> {
 const binaryPlugin = Capacitor.isNativePlatform()
   ? registerPlugin<{
       put(options: { url: string; data: string; headers: Record<string, string> }): Promise<{ status: number }>
+      get(options: { url: string; headers: Record<string, string> }): Promise<{ status: number; data: string }>
       request(options: { url: string; method: 'MKCOL' | 'PROPFIND'; data?: string; headers: Record<string, string> }): Promise<{ status: number; data: string }>
     }>('TomatoWebDAVBinary')
   : null
 
-/** CapacitorHttp 的 arraybuffer 响应在 Android 上是 base64 字符串；
- * Content-Type: application/json 时原生插件会直接解析成对象。不要把加密
- * 字节按 UTF-8 读取，否则 GCM 校验必定失败。 */
+/** Android 原生 OkHttp 总是返回原始字节的 base64，不依赖服务器 Content-Type。
+ * CapacitorHttp 即使指定 arraybuffer，在 application/json 响应时也会先解析
+ * 成文本/对象；对含中文的明文误用 atob 会报 Latin1 错误，密文也会损坏。 */
 async function downloadWebDAVBytes(url: string, headers: Record<string, string>): Promise<{
   status: number
   bytes: Uint8Array
 }> {
-  if (Capacitor.isNativePlatform()) {
-    const response = await CapacitorHttp.request({
-      url,
-      method: 'GET',
-      headers,
-      responseType: 'arraybuffer',
-      connectTimeout: 20000,
-      readTimeout: 180000
-    })
+  if (binaryPlugin) {
+    const response = await binaryPlugin.get({ url, headers })
     if (response.status < 200 || response.status >= 300) {
       return { status: response.status, bytes: new Uint8Array() }
     }
-    if (typeof response.data === 'string') {
-      const binary = atob(response.data)
-      const bytes = new Uint8Array(binary.length)
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-      return { status: response.status, bytes }
+    let binary: string
+    try {
+      binary = atob(response.data)
+    } catch {
+      throw new Error('WebDAV 下载内容编码异常')
     }
-    return { status: response.status, bytes: new TextEncoder().encode(JSON.stringify(response.data)) }
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    return { status: response.status, bytes }
   }
   const response = await request(url, { method: 'GET', headers })
   return {

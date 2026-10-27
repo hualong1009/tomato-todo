@@ -12,6 +12,7 @@ const h = vi.hoisted(() => ({
   storage: new Map<string, string>(),
   request: vi.fn(),
   binaryPut: vi.fn(),
+  binaryGet: vi.fn(),
   binaryRequest: vi.fn()
 }))
 
@@ -39,6 +40,7 @@ vi.mock('@capacitor/core', () => ({
   },
   registerPlugin: () => ({
     put: (...args: unknown[]) => h.binaryPut(...args),
+    get: (...args: unknown[]) => h.binaryGet(...args),
     request: (...args: unknown[]) => h.binaryRequest(...args),
     update: async () => undefined,
     apply: async () => undefined,
@@ -59,9 +61,9 @@ function respond(data: unknown, status = 200) {
   h.request.mockResolvedValueOnce({ status, data, headers: {} })
 }
 
-/** Android CapacitorHttp 的 arraybuffer 响应通过桥接以 base64 字符串返回。 */
+/** Android WebDAV 原生插件总是把原始下载字节经桥接编码为 base64。 */
 function respondBytes(data: Uint8Array, status = 200) {
-  respond(Buffer.from(data).toString('base64'), status)
+  h.binaryGet.mockResolvedValueOnce({ status, data: Buffer.from(data).toString('base64') })
 }
 
 function respondDAV(status: number, data = '') {
@@ -72,6 +74,7 @@ beforeEach(() => {
   h.storage.clear()
   h.request.mockReset()
   h.binaryPut.mockReset()
+  h.binaryGet.mockReset()
   h.binaryRequest.mockReset()
 })
 
@@ -223,7 +226,7 @@ describe('Web 适配层：AI 与 WebDAV', () => {
       ai: { ...base.ai, apiKey: 'sk-keep' },
       webdav: { ...base.webdav, url: 'https://dav.test/remote/', remotePath: 'data.json' }
     })
-    respond(
+    respondBytes(new TextEncoder().encode(JSON.stringify(
       {
         version: 1,
         app: 'tomato-todo',
@@ -232,7 +235,7 @@ describe('Web 适配层：AI 与 WebDAV', () => {
         todos: [
           {
             id: 'remote-1',
-            title: '远端来的任务',
+            title: '远端来的中文任务 🍅',
             content: '',
             groupId: 'inbox',
             urgency: 'medium',
@@ -248,14 +251,28 @@ describe('Web 适配层：AI 与 WebDAV', () => {
             focusLog: []
           }
         ]
-      },
-      200
-    )
+      }
+    )))
     const result = await api.restoreWebDAV()
     expect(result.ok).toBe(true)
     const state = await api.getState()
-    expect(state.todos[0].title).toBe('远端来的任务')
+    expect(state.todos[0].title).toBe('远端来的中文任务 🍅')
     expect(state.settings.ai.apiKey).toBe('sk-keep')
+    expect(h.binaryGet).toHaveBeenCalledTimes(1)
+    expect(h.request).not.toHaveBeenCalled()
+  })
+
+  it('原生桥返回非 base64 文本时安全报错，不覆盖本机数据', async () => {
+    const api = await freshApi()
+    const original = await api.addTodo({ title: '本机任务' })
+    await api.updateSettings({ webdav: {
+      ...original.settings.webdav, url: 'https://dav.test/remote/', remotePath: 'data.json'
+    } })
+    h.binaryGet.mockResolvedValueOnce({ status: 200, data: '中文错误体' })
+    const result = await api.restoreWebDAV()
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('编码异常')
+    expect((await api.getState()).todos[0].title).toBe('本机任务')
   })
 
   it('远端文件非法时拒绝导入', async () => {
@@ -313,12 +330,12 @@ describe('Web 适配层：AI 与 WebDAV', () => {
     expect(restored.settings.webdav.encryptionPassword).toBe('🍅 测试密码')
     expect(restored.settings.webdav.lastStatus).toBe('success')
     expect(restored.settings.webdav.lastSyncAt).toBeTruthy()
-    expect(h.request.mock.calls.map(([call]) => call.url)).toEqual([
+    expect(h.binaryGet.mock.calls.map(([call]) => call.url)).toEqual([
       'https://dav.test/remote/tomato-todo/data.json',
       `https://dav.test/remote/tomato-todo/blobs/${imageName}`,
       `https://dav.test/remote/tomato-todo/blobs/${attachmentName}`
     ])
-    expect(h.request.mock.calls.every(([call]) => call.responseType === 'arraybuffer')).toBe(true)
+    expect(h.request).not.toHaveBeenCalled()
   })
 
   it('密码错误或外置加密资源损坏时不会覆盖本机待办', async () => {
