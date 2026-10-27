@@ -130,12 +130,12 @@ function setupWebViewInsets(): void {
   themePlugin
     .activateWebViewInsets()
     .then(applySafeAreaInsets)
-    .catch(() => undefined)
+    .catch(() => { insetsSetup = false })
   themePlugin
     .addListener('safeArea', (data) => {
       applySafeAreaInsets(data)
     })
-    .catch(() => undefined)
+    .catch(() => { insetsSetup = false })
 }
 
 function systemPrefersDark(): boolean {
@@ -155,7 +155,10 @@ function syncTheme(): void {
   const scheme = effectiveScheme()
   if (scheme === lastScheme) return
   lastScheme = scheme
-  void themePlugin.apply({ scheme }).catch(() => undefined)
+  void themePlugin.apply({ scheme }).catch(() => {
+    // 启动早期桥接暂不可用时，后续保存同一主题仍可重试。
+    if (lastScheme === scheme) lastScheme = null
+  })
 }
 
 // 「跟随系统」时，系统深浅色变化要即时同步到系统栏
@@ -219,11 +222,16 @@ function loadState(): Promise<void> {
         } catch {
           state = createDefaultState()
         }
-        syncTheme()
-        syncWidget()
       })
       .catch(() => {
         state = createDefaultState()
+      })
+      .then(() => {
+        // 首次安装没有已存数据，也必须把默认/系统主题应用到状态栏，
+        // 并启用 WebView insets；不能在 value 为 null 时提前跳过。
+        syncTheme()
+        syncWidget()
+        setupWebViewInsets()
       })
   }
   return loadPromise as Promise<void>

@@ -14,7 +14,9 @@ const h = vi.hoisted(() => ({
   binaryPut: vi.fn(),
   binaryGet: vi.fn(),
   binaryRequest: vi.fn(),
-  externalOpen: vi.fn()
+  externalOpen: vi.fn(),
+  themeApply: vi.fn(),
+  insetsActivate: vi.fn()
 }))
 
 vi.mock('@capacitor/preferences', () => ({
@@ -45,8 +47,8 @@ vi.mock('@capacitor/core', () => ({
     request: (...args: unknown[]) => h.binaryRequest(...args),
     open: (...args: unknown[]) => h.externalOpen(...args),
     update: async () => undefined,
-    apply: async () => undefined,
-    activateWebViewInsets: async () => ({ top: 40, bottom: 30, left: 0, right: 0 }),
+    apply: (...args: unknown[]) => h.themeApply(...args),
+    activateWebViewInsets: (...args: unknown[]) => h.insetsActivate(...args),
     addListener: async () => ({ remove: () => undefined })
   })
 }))
@@ -79,15 +81,42 @@ beforeEach(() => {
   h.binaryGet.mockReset()
   h.binaryRequest.mockReset()
   h.externalOpen.mockReset()
+  h.themeApply.mockReset().mockResolvedValue(undefined)
+  h.insetsActivate.mockReset().mockResolvedValue({ top: 40, bottom: 30, left: 0, right: 0 })
 })
 
 describe('Web 适配层：状态与持久化', () => {
-  it('初始状态为默认分组与空待办', async () => {
+  it('全新安装（Preferences 无数据）也会同步系统主题与 WebView insets', async () => {
     const api = await freshApi()
     const state = await api.getState()
     expect(state.todos).toHaveLength(0)
     expect(state.groups).toHaveLength(1)
     expect(api.platform).toBe('android')
+    expect(state.settings.general.theme).toBe('system')
+    // 无 window 的测试环境视为系统浅色；旧逻辑在 value 为 null 时会提前 return。
+    expect(h.themeApply).toHaveBeenCalledWith({ scheme: 'light' })
+    expect(h.insetsActivate).toHaveBeenCalledTimes(1)
+  })
+
+  it('已有数据与损坏数据启动时也能同步对应主题', async () => {
+    const initial = await freshApi()
+    const saved = await initial.getState()
+    saved.settings.general.theme = 'dark'
+    h.storage.set('tomato-todo-data', JSON.stringify(saved))
+    h.themeApply.mockClear()
+    h.insetsActivate.mockClear()
+    const reloaded = await freshApi()
+    await reloaded.getState()
+    expect(h.themeApply).toHaveBeenCalledWith({ scheme: 'dark' })
+    expect(h.insetsActivate).toHaveBeenCalledTimes(1)
+
+    h.storage.set('tomato-todo-data', '{invalid')
+    h.themeApply.mockClear()
+    h.insetsActivate.mockClear()
+    const fallback = await freshApi()
+    await fallback.getState()
+    expect(h.themeApply).toHaveBeenCalledWith({ scheme: 'light' })
+    expect(h.insetsActivate).toHaveBeenCalledTimes(1)
   })
 
   it('新增待办会写入存储并广播', async () => {
