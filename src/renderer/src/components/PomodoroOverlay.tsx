@@ -1,4 +1,5 @@
 import type { Todo } from '@shared/types'
+import { useBackDismiss } from '../platform/backNavigation'
 import { formatClock } from '../utils/format'
 import {
   CoffeeIcon,
@@ -45,6 +46,9 @@ export function PomodoroOverlay({
   const radius = 112
   const circumference = 2 * Math.PI * radius
   const offset = circumference * (1 - progress)
+
+  // 手机端返回键收起为迷你计时器，不中断本次专注
+  useBackDismiss(true, onCollapse)
 
   return (
     <div className="pomodoro-backdrop">
