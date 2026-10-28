@@ -4,6 +4,7 @@ import type { AppState, Attachment, Todo, UpdateTodoPatch, Urgency } from '@shar
 import { formatBytes } from '@shared/attachments'
 import { fileToAttachment } from '../utils/attachmentFile'
 import { isMobile } from '../platform'
+import { useBackDismiss } from '../platform/backNavigation'
 import { getTodoStatus, STATUS_META } from '@shared/todoUtils'
 import {
   formatDateTime,
@@ -160,6 +161,9 @@ export function DetailPanel({
     setEditing(false)
     onClose()
   }
+
+  // 手机端返回键和面板上的关闭按钮走同一套逻辑（编辑中会先确认）
+  useBackDismiss(true, requestClose)
 
   // 编辑态支持 Ctrl+S 保存、Esc 取消
   useEffect(() => {

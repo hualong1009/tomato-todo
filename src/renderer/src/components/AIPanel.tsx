@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { RANGE_LABELS, buildSummaryContext } from '@shared/summary'
 import { listPromptTemplates } from '@shared/promptTemplates'
 import type { AIRequestResult, AppState, SummaryDates, SummaryRange } from '@shared/types'
+import { useBackDismiss } from '../platform/backNavigation'
 import { cleanError, formatDateTime } from '../utils/format'
 import { Markdown } from './Markdown'
 import {
@@ -110,6 +111,11 @@ export function AIPanel({ open, state, onClose, onOpenSettings, onToast }: AIPan
     setEditing(false)
     onToast('已保存修改', 'success')
   }
+
+  // 手机端返回键关闭回顾抽屉；生成中不关闭，避免丢失请求结果
+  useBackDismiss(open, () => {
+    if (!loading) onClose()
+  })
 
   if (!open) return null
   return (

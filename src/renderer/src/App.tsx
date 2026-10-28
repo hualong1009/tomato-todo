@@ -43,6 +43,7 @@ import {
 import { PomodoroMini, PomodoroOverlay, type PomodoroState } from './components/PomodoroOverlay'
 import { SettingsModal } from './components/SettingsModal'
 import { isMobile } from './platform'
+import { dismissTopOverlay, exitMobileApp, installBackButton } from './platform/backNavigation'
 import { BottomSheet } from './components/BottomSheet'
 import { MobileViewSheet } from './components/MobileViewSheet'
 import { Sidebar, type ViewKey } from './components/Sidebar'
@@ -112,6 +113,12 @@ export default function App() {
   const stateRef = useRef<AppState | null>(null)
   pomodoroRef.current = pomodoro
   stateRef.current = state
+  const viewRef = useRef<ViewKey>(view)
+  viewRef.current = view
+  const searchOpenRef = useRef(false)
+  searchOpenRef.current = searchOpen
+  const securityRef = useRef<SecurityState | null>(null)
+  securityRef.current = security
 
   const showToast = useCallback(
     (message: string, tone: 'info' | 'success' | 'error' = 'info') => {
@@ -257,6 +264,34 @@ export default function App() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [context, aiOpen])
+
+  // Android 返回键：先逐个关闭已打开的浮层（浮层自己注册，见 platform/backNavigation），
+  // 再退出搜索 / 分组视图，最后才退出应用。锁定状态下返回不生效。
+  useEffect(() => {
+    let dispose: (() => void) | null = null
+    let cancelled = false
+    void installBackButton(() => {
+      if (securityRef.current?.locked && securityRef.current.hasPassword) return
+      if (dismissTopOverlay()) return
+      if (searchOpenRef.current) {
+        setSearchOpen(false)
+        setSearch('')
+        return
+      }
+      if (viewRef.current !== 'all') {
+        setView('all')
+        return
+      }
+      void exitMobileApp()
+    }).then((cleanup) => {
+      if (cancelled) cleanup?.()
+      else dispose = cleanup
+    })
+    return () => {
+      cancelled = true
+      dispose?.()
+    }
+  }, [])
 
   useEffect(() => {
     if (!pomodoro?.running || !pomodoro.endsAt) return

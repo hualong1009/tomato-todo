@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import type { ReactNode } from 'react'
+import { useBackDismiss } from '../platform/backNavigation'
 import { XIcon } from './Icons'
 
 interface ModalProps {
@@ -21,6 +22,9 @@ export function Modal({ open, onClose, title, className = '', backdropClassName 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
+
+  // 手机端返回键先关闭弹窗（嵌套弹窗也能按打开顺序逐个关闭）
+  useBackDismiss(open, onClose)
 
   if (!open) return null
   return (

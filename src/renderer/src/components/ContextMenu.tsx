@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { isMobile } from '../platform'
+import { useBackDismiss } from '../platform/backNavigation'
 
 export interface MenuItem {
   id: string
@@ -23,6 +24,9 @@ interface ContextMenuProps {
 }
 
 export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
+  // 手机端返回键先关闭操作面板
+  useBackDismiss(true, onClose)
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()

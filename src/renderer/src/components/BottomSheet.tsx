@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useBackDismiss } from '../platform/backNavigation'
 import { keyboardViewportBounds } from '../utils/keyboardViewport'
 import { XIcon } from './Icons'
 
@@ -77,6 +78,9 @@ export function BottomSheet({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
+
+  // 手机端返回键先关闭底部面板
+  useBackDismiss(open, onClose)
 
   if (!open) return null
 
