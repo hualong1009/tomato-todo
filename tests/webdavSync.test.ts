@@ -4,11 +4,13 @@ import {
   clampSyncInterval,
   decideWebDAVSync,
   localFingerprint,
-  shouldAutoSync
+  shouldAutoSync,
+  shouldSyncOnChange
 } from '../src/shared/webdavSync'
 import type { WebDAVSettings } from '../src/shared/types'
 import { createDefaultState } from '../src/main/persistence'
 import { createTodo, setCompleted } from '../src/shared/operations'
+import { syncStatusDetail, syncStatusLabel } from '../src/shared/syncStatus'
 import { makeState } from './helpers'
 
 function webdav(overrides: Partial<WebDAVSettings> = {}): WebDAVSettings {
@@ -142,5 +144,37 @@ describe('双向同步决策', () => {
       lastSyncAt: '2026-10-28T10:00:01.000Z'
     })
     expect(decision.action).toBe('none')
+  })
+})
+
+describe('改动后自动同步', () => {
+  it('开启「变动后自动同步」且已配置地址时才自动上传', () => {
+    expect(shouldSyncOnChange(webdav({ autoUpload: true }))).toBe(true)
+    expect(shouldSyncOnChange(webdav({ autoUpload: false }))).toBe(false)
+    expect(shouldSyncOnChange(webdav({ autoUpload: true, enabled: false }))).toBe(false)
+    expect(shouldSyncOnChange(webdav({ autoUpload: true, url: '  ' }))).toBe(false)
+  })
+
+  it('与定时同步开关相互独立：关掉定时同步仍然改动即同步', () => {
+    expect(shouldSyncOnChange(webdav({ autoUpload: true, syncIntervalMinutes: 0 }))).toBe(true)
+    expect(shouldAutoSync(webdav({ autoUpload: true, syncIntervalMinutes: 0 }))).toBe(false)
+  })
+})
+
+describe('同步状态文案（桌面标题栏 / 手机顶部栏共用）', () => {
+  it('未启用 / 失败 / 等待 / 已同步', () => {
+    expect(syncStatusLabel({ enabled: false, status: 'idle', lastSyncAt: null })).toBe('WebDAV 未启用')
+    expect(syncStatusLabel({ enabled: true, status: 'error', lastSyncAt: null })).toBe('同步失败')
+    expect(syncStatusLabel({ enabled: true, status: 'idle', lastSyncAt: null })).toBe('等待同步')
+    const at = new Date(2026, 9, 28, 9, 5, 0).toISOString()
+    expect(syncStatusLabel({ enabled: true, status: 'success', lastSyncAt: at })).toBe('已同步 · 09:05')
+  })
+
+  it('详情文案给出原因与操作提示', () => {
+    expect(syncStatusDetail({ enabled: false, status: 'idle', lastSyncAt: null })).toContain('去设置')
+    expect(
+      syncStatusDetail({ enabled: true, status: 'error', lastSyncAt: null, lastError: 'HTTP 401' })
+    ).toBe('上次同步失败：HTTP 401，点击可重试')
+    expect(syncStatusDetail({ enabled: true, status: 'idle', lastSyncAt: null })).toContain('立即同步')
   })
 })

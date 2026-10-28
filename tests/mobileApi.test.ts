@@ -543,7 +543,7 @@ describe('Web 适配层：AI 与 WebDAV', () => {
     expect(decryptBackup(Buffer.from(first.data, 'base64'), 'new-password')).toBe(image)
   })
 
-  it('附件上传失败时不写远端主文件，且自动上传会在待办变动后触发', async () => {
+  it('附件上传失败时不写远端主文件，且待办变动后会自动同步', async () => {
     const api = await freshApi()
     const base = (await api.getState()).settings.webdav
     await api.updateSettings({ webdav: {
@@ -562,12 +562,53 @@ describe('Web 适配层：AI 与 WebDAV', () => {
 
     const settings = (await api.getState()).settings.webdav
     await api.updateSettings({ webdav: { ...settings, enabled: true, autoUpload: true, splitAssets: false } })
-    // 无需显式调用 uploadWebDAV：本地编辑自动排队上传。
+    // 无需显式调用 uploadWebDAV：本地编辑后自动排队同步。
+    // 还没成功同步过（没有指纹）时会先探一下远端：这里远端没有备份。
+    h.binaryGet.mockResolvedValueOnce({ status: 404, data: '' })
     h.binaryPut.mockResolvedValueOnce({ status: 201 })
     await api.addTodo({ title: '自动同步的新待办' })
     await new Promise((resolve) => setTimeout(resolve, 1900))
     expect(h.binaryPut).toHaveBeenCalledTimes(2)
     expect((await api.getState()).settings.webdav.lastStatus).toBe('success')
+  })
+
+  it('已经同步过之后，改动会直接上传，不再先读远端', async () => {
+    const api = await freshApi()
+    const base = (await api.getState()).settings.webdav
+    await api.updateSettings({ webdav: {
+      ...base, url: 'https://dav.test/root/', remotePath: 'data.json',
+      enabled: true, autoUpload: true, splitAssets: false
+    } })
+    const puts = () => h.request.mock.calls.filter(([arg]) => (arg as { method?: string }).method === 'PUT').length
+    // 还没同步过：先探测远端（404 = 没有备份），再上传
+    h.binaryGet.mockResolvedValueOnce({ status: 404, data: '' })
+    respond('', 201)
+    await api.addTodo({ title: '第一次同步' })
+    await new Promise((resolve) => setTimeout(resolve, 1900))
+    const getsAfterFirst = h.binaryGet.mock.calls.length
+    expect(puts()).toBe(1)
+
+    // 有同步基准之后的改动：直接 PUT，省掉探测请求
+    respond('', 201)
+    await api.addTodo({ title: '第二次同步' })
+    await new Promise((resolve) => setTimeout(resolve, 1900))
+    expect(h.binaryGet.mock.calls.length).toBe(getsAfterFirst)
+    expect(puts()).toBe(2)
+    expect((await api.getState()).settings.webdav.lastStatus).toBe('success')
+  })
+
+  it('关闭「变动后自动同步」后，改动不会立刻上传', async () => {
+    const api = await freshApi()
+    const base = (await api.getState()).settings.webdav
+    await api.updateSettings({ webdav: {
+      ...base, url: 'https://dav.test/root/', remotePath: 'data.json',
+      enabled: true, autoUpload: false, splitAssets: false
+    } })
+    h.binaryPut.mockResolvedValue({ status: 201 })
+    await api.addTodo({ title: '只存本地' })
+    await new Promise((resolve) => setTimeout(resolve, 1900))
+    expect(h.binaryPut).not.toHaveBeenCalled()
+    expect(h.binaryGet).not.toHaveBeenCalled()
   })
 
   it('双向同步：远端有更新且本机无改动时拉取远端', async () => {

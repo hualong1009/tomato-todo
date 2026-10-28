@@ -891,6 +891,8 @@ function setupApp(): void {
   store.onToast = (message, tone = 'info') => sendEvent({ type: 'toast', message, tone })
   registerIpc()
   mainWindow = createMainWindow()
+  // 窗口重新获得焦点时补一次同步（受「定时双向同步」间隔约束，不会每次都发请求）
+  mainWindow.on('focus', () => store?.nudgeAutoSync())
   syncStickyWindows()
   setupInitialHotkey()
   createTray()

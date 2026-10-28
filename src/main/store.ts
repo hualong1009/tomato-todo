@@ -8,7 +8,12 @@ import type {
   WebDAVSettings,
   WebDAVSyncResult
 } from '../shared/types'
-import { decideWebDAVSync, localFingerprint, shouldAutoSync } from '../shared/webdavSync'
+import {
+  decideWebDAVSync,
+  localFingerprint,
+  shouldAutoSync,
+  shouldSyncOnChange
+} from '../shared/webdavSync'
 import { createDefaultState, loadStateFile, normaliseState, saveStateFile } from './persistence'
 import { downloadFromWebDAV, uploadToWebDAV } from './webdav'
 
@@ -178,14 +183,30 @@ export class AppStore {
     }
   }
 
+  /**
+   * 本机数据改动后（保存详情、勾选完成、改分组…）约 1.6 秒自动同步一次。
+   * 已经有本机改动，所以跳过「先读远端」的探测，直接上传，少一次请求。
+   */
   scheduleWebdavUpload(delay = 1600): void {
     if (this.disposed) return
-    const config = this.state.settings.webdav
-    if (!config.enabled || !config.autoUpload || !config.url.trim()) return
+    if (!shouldSyncOnChange(this.state.settings.webdav)) return
     if (this.webdavTimer) clearTimeout(this.webdavTimer)
     this.webdavTimer = setTimeout(() => {
       this.webdavTimer = null
-      void this.uploadToWebDAV()
+      void this.syncWebDAV({ notify: false, dirty: true })
+    }, delay)
+  }
+
+  /**
+   * 同步进行中又来了新的同步请求：稍后再跑一次。
+   * 这里不再判断「变动后自动同步」开关——请求已经发出过，补跑一次即可。
+   */
+  private scheduleFollowUpSync(delay: number): void {
+    if (this.disposed) return
+    if (this.webdavTimer) clearTimeout(this.webdavTimer)
+    this.webdavTimer = setTimeout(() => {
+      this.webdavTimer = null
+      void this.syncWebDAV({ notify: false })
     }, delay)
   }
 
@@ -223,7 +244,7 @@ export class AppStore {
     if (!result.ok) this.onToast?.(`WebDAV 同步失败：${result.message}`, 'error')
     if (this.webdavQueued) {
       this.webdavQueued = false
-      this.scheduleWebdavUpload(500)
+      this.scheduleFollowUpSync(500)
     }
     return result
   }
@@ -256,7 +277,7 @@ export class AppStore {
    * 双向同步：先读远端 savedAt 判断哪边有新数据，再决定上传 / 拉取 / 什么都不做。
    * 定时同步、应用启动、设置变更后都走这里。
    */
-  async syncWebDAV(options: { notify?: boolean } = {}): Promise<WebDAVSyncResult> {
+  async syncWebDAV(options: { notify?: boolean; dirty?: boolean } = {}): Promise<WebDAVSyncResult> {
     const config = this.state.settings.webdav
     if (!config.enabled) return { ok: false, message: 'WebDAV 同步未启用' }
     if (!config.url.trim()) return { ok: false, message: '请先配置 WebDAV 地址' }
@@ -267,34 +288,40 @@ export class AppStore {
     this.webdavInFlight = true
     let result: WebDAVSyncResult
     try {
-      result = await this.runSync(options.notify !== false)
+      result = await this.runSync(options.notify !== false, options.dirty === true)
     } finally {
       this.webdavInFlight = false
     }
     if (this.webdavQueued) {
       this.webdavQueued = false
-      this.scheduleWebdavUpload(600)
+      this.scheduleFollowUpSync(600)
     }
     return result
   }
 
-  private async runSync(notify: boolean): Promise<WebDAVSyncResult> {
+  private async runSync(notify: boolean, dirty: boolean): Promise<WebDAVSyncResult> {
     const config = this.state.settings.webdav
     const localHash = localFingerprint(this.state)
-    // 先只读主备份文件的 savedAt，不下载 blobs/，避免每次定时同步都拉一遍附件
-    const preview = await downloadFromWebDAV(config, this.fetchImpl, { inlineAssets: false })
-    if (!preview.ok && preview.status !== 404) {
+    // 先只读主备份文件的 savedAt，不下载 blobs/，避免每次定时同步都拉一遍附件。
+    // 但如果刚刚才改过本机数据（一定有东西要传），这一步可以省掉。
+    const preview =
+      dirty && config.lastSyncedHash
+        ? null
+        : await downloadFromWebDAV(config, this.fetchImpl, { inlineAssets: false })
+    if (preview && !preview.ok && preview.status !== 404) {
       const failed: WebDAVSyncResult = { ok: false, message: preview.message, action: 'none' }
       this.applyWebdavResult(failed)
       return failed
     }
-    const decision = decideWebDAVSync({
-      localHash,
-      lastSyncedHash: config.lastSyncedHash,
-      remoteSavedAt: preview.ok ? preview.savedAt : null,
-      lastRemoteSavedAt: config.lastRemoteSavedAt,
-      lastSyncAt: config.lastSyncAt
-    })
+    const decision = preview
+      ? decideWebDAVSync({
+          localHash,
+          lastSyncedHash: config.lastSyncedHash,
+          remoteSavedAt: preview.ok ? preview.savedAt : null,
+          lastRemoteSavedAt: config.lastRemoteSavedAt,
+          lastSyncAt: config.lastSyncAt
+        })
+      : { action: 'upload' as const, conflict: false, reason: '本机有改动，直接上传' }
 
     if (decision.action === 'download') {
       const full = await downloadFromWebDAV(config, this.fetchImpl)
@@ -338,7 +365,7 @@ export class AppStore {
       ok: true,
       message: '已是最新',
       at: new Date().toISOString(),
-      remoteSavedAt: preview.savedAt,
+      remoteSavedAt: preview?.savedAt,
       action: 'none'
     }
     this.applyWebdavResult(current)
@@ -367,6 +394,11 @@ export class AppStore {
       void this.autoSyncTick(true)
     }, delay)
     this.webdavKickTimer.unref?.()
+  }
+
+  /** 窗口重新获得焦点时调用：距上次同步超过间隔就同步一次，尽快拿到其他设备的改动。 */
+  nudgeAutoSync(): void {
+    void this.autoSyncTick()
   }
 
   private async autoSyncTick(force = false): Promise<void> {

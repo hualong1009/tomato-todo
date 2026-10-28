@@ -113,3 +113,13 @@ export function decideWebDAVSync(input: WebDAVSyncInput): WebDAVSyncDecision {
 export function shouldAutoSync(settings: WebDAVSettings): boolean {
   return Boolean(settings.enabled && settings.url.trim() && settings.syncIntervalMinutes > 0)
 }
+
+/**
+ * 改动后是否立即同步（保存、勾选完成、改分组…）。
+ *
+ * 与定时同步的开关相互独立：关掉定时同步只影响「定期去看看远端有没有新数据」，
+ * 本机改完仍然会马上推上去，不会等到下次定时同步。
+ */
+export function shouldSyncOnChange(settings: WebDAVSettings): boolean {
+  return Boolean(settings.enabled && settings.url.trim() && settings.autoUpload)
+}

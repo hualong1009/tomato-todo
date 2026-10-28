@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { syncStatusDetail, syncStatusLabel, type SyncIndicatorSource } from '../utils/format'
 import {
   CloudCheckIcon,
   CloudIcon,
@@ -11,7 +12,7 @@ import {
 
 interface TitleBarProps {
   maximized: boolean
-  syncState: { enabled: boolean; status: 'idle' | 'success' | 'error'; lastSyncAt: string | null }
+  syncState: SyncIndicatorSource
   miniTimer?: ReactNode
   onMinimize: () => void
   onToggleMaximize: () => void
@@ -26,13 +27,7 @@ export function TitleBar({
   onToggleMaximize,
   onClose
 }: TitleBarProps) {
-  const cloudTitle = !syncState.enabled
-    ? 'WebDAV 未启用'
-    : syncState.status === 'success'
-      ? `已同步${syncState.lastSyncAt ? ` · ${new Date(syncState.lastSyncAt).toLocaleTimeString()}` : ''}`
-      : syncState.status === 'error'
-        ? 'WebDAV 同步失败'
-        : '等待同步'
+  const cloudTitle = syncStatusLabel(syncState)
   return (
     <header className="titlebar">
       <div className="titlebar-drag">
@@ -44,7 +39,10 @@ export function TitleBar({
           <span className="brand-tag">FOCUS LIST</span>
         </div>
         <span className="titlebar-divider" />
-        <span className={`sync-indicator ${syncState.enabled ? syncState.status : 'off'}`} title={cloudTitle}>
+        <span
+          className={`sync-indicator ${syncState.enabled ? syncState.status : 'off'}`}
+          title={syncStatusDetail(syncState)}
+        >
           {!syncState.enabled ? (
             <CloudOffIcon size={14} />
           ) : syncState.status === 'success' ? (
