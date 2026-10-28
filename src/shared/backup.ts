@@ -18,13 +18,16 @@ export interface RemotePayload {
   assets?: RemoteAsset[]
 }
 
-/** WebDAV 备份内容：只包含待办与分组，不包含任何密钥或本机设置。 */
-export function createRemotePayload(state: AppState): string {
+/**
+ * WebDAV 备份内容：只包含待办与分组，不包含任何密钥或本机设置。
+ * `savedAt` 可由调用方指定，便于上传后把同一个时间戳记为「远端版本」。
+ */
+export function createRemotePayload(state: AppState, savedAt = new Date().toISOString()): string {
   return JSON.stringify(
     {
       version: 1,
       app: 'tomato-todo',
-      savedAt: new Date().toISOString(),
+      savedAt,
       groups: state.groups,
       todos: state.todos
     },
@@ -34,13 +37,17 @@ export function createRemotePayload(state: AppState): string {
 }
 
 /** 生成带外置资源清单的备份内容（WebDAV 拆分同步用）。 */
-export function createRemotePayloadWith(state: AppState, todos: Todo[]): string {
+export function createRemotePayloadWith(
+  state: AppState,
+  todos: Todo[],
+  savedAt = new Date().toISOString()
+): string {
   const assets = collectBlobRefs(todos).map((name) => ({ name }))
   return JSON.stringify(
     {
       version: 2,
       app: 'tomato-todo',
-      savedAt: new Date().toISOString(),
+      savedAt,
       groups: state.groups,
       todos,
       assets

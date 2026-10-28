@@ -6,6 +6,7 @@ import {
   cleanError,
   prettifyHotkey
 } from '../utils/format'
+import { SYNC_INTERVAL_OPTIONS } from '@shared/webdavSync'
 import { isMobile } from '../platform'
 import { ConfirmDialog } from './Dialogs'
 import { Dropdown } from './Dropdown'
@@ -55,6 +56,12 @@ const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: 'about', label: '关于', icon: <TomatoIcon size={16} /> }
 ]
 
+const SYNC_INTERVAL_DROPDOWN = SYNC_INTERVAL_OPTIONS.map((minutes) => ({
+  value: String(minutes),
+  label: minutes === 0 ? '关闭定时同步' : `每 ${minutes} 分钟`,
+  color: minutes === 0 ? '#8b96b1' : '#4ea8ff'
+}))
+
 const AUTO_LOCK_OPTIONS = [
   { value: '0', label: '不自动锁定', color: '#8b96b1' },
   { value: '1', label: '1 分钟', color: '#ff4d6d' },
@@ -97,7 +104,7 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast, onChec
   const [modelsBusy, setModelsBusy] = useState(false)
   const [showKey, setShowKey] = useState(false)
   const [recording, setRecording] = useState(false)
-  const [webdavBusy, setWebdavBusy] = useState<'test' | 'upload' | 'restore' | null>(null)
+  const [webdavBusy, setWebdavBusy] = useState<'test' | 'sync' | 'upload' | 'restore' | null>(null)
   const [webdavResult, setWebdavResult] = useState<{ ok: boolean; message: string } | null>(null)
   const [confirmRestore, setConfirmRestore] = useState(false)
   const [mcpInfo, setMcpInfo] = useState<McpInfo | null>(null)
@@ -321,6 +328,22 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast, onChec
       setWebdavResult({ ok: result.ok, message: result.message })
     } catch (error) {
       setWebdavResult({ ok: false, message: cleanError(error) })
+    } finally {
+      setWebdavBusy(null)
+    }
+  }
+
+  const syncNow = async () => {
+    setWebdavBusy('sync')
+    try {
+      const saved = await onSave(draft)
+      if (!saved.ok) return
+      const result = await window.api.syncWebDAV()
+      setWebdavResult({ ok: result.ok, message: result.message })
+      if (result.ok) onToast(result.message, 'success')
+      else onToast(result.message, 'error')
+    } catch (error) {
+      onToast(cleanError(error), 'error')
     } finally {
       setWebdavBusy(null)
     }
@@ -829,7 +852,7 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast, onChec
               <section className="settings-section">
                 <h3>WebDAV 备份</h3>
                 <p className="settings-desc">
-                  每次本地修改后自动把待办与分组保存到 WebDAV。远端备份不包含 AI 密钥与 WebDAV 密码。
+                  支持双向同步：本机有改动自动上传，其他设备改过则定时拉取。远端备份不包含 AI 密钥与 WebDAV 密码。
                 </p>
                 <label className="toggle-row">
                   <input
@@ -927,8 +950,20 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast, onChec
                   <span className="toggle-ui" />
                   <span>
                     <strong>自动上传</strong>
-                    <small>变动后约 1.6 秒自动上传；从另一设备获取变动需手动恢复，多个设备同时编辑可能互相覆盖</small>
+                    <small>本机变动后约 1.6 秒自动上传；关闭后改动会在下次定时同步时一起上传</small>
                   </span>
+                </label>
+                <label className="field">
+                  <span>定时双向同步</span>
+                  <Dropdown
+                    value={String(draft.webdav.syncIntervalMinutes)}
+                    options={SYNC_INTERVAL_DROPDOWN}
+                    onChange={(next) => updateWebdav({ syncIntervalMinutes: Number(next) })}
+                    testId="setting-webdav-sync-interval"
+                  />
+                  <small>
+                    每隔一段时间先看远端有没有新备份：本机没改就自动拉取，本机改过就上传；两端都改过时保留本机数据并覆盖远端。
+                  </small>
                 </label>
                 <div className="webdav-actions">
                   <button
@@ -942,12 +977,21 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast, onChec
                   </button>
                   <button
                     className="btn ghost"
+                    onClick={() => void syncNow()}
+                    disabled={Boolean(webdavBusy) || !draft.webdav.url}
+                    data-testid="setting-webdav-sync"
+                  >
+                    {webdavBusy === 'sync' ? <span className="spinner" /> : <CloudCheckIcon size={15} />}
+                    立即同步
+                  </button>
+                  <button
+                    className="btn ghost"
                     onClick={() => void uploadNow()}
                     disabled={Boolean(webdavBusy) || !draft.webdav.url}
                     data-testid="setting-webdav-upload"
                   >
-                    {webdavBusy === 'upload' ? <span className="spinner" /> : <CloudCheckIcon size={15} />}
-                    立即备份
+                    {webdavBusy === 'upload' ? <span className="spinner" /> : <UploadIcon size={15} />}
+                    仅上传
                   </button>
                   <button
                     className="btn ghost danger-text"
@@ -972,7 +1016,7 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast, onChec
                   )}
                 </div>
                 <p className="settings-note">
-                  恢复会用远端待办和分组覆盖本地列表，但保留本机的 AI、快捷键与 WebDAV 设置。
+                  恢复 / 自动拉取会用远端待办和分组覆盖本地列表，但保留本机的 AI、快捷键与 WebDAV 设置。
                 </p>
               </section>
             )}

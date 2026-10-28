@@ -485,9 +485,12 @@ function registerIpc(): void {
   ipcMain.handle('settings:update', (_event, rawPatch: Partial<AppSettings>) => {
     const patch: SettingsPatch = JSON.parse(JSON.stringify(rawPatch ?? {}))
     if (patch.webdav) {
+      // 同步状态字段只由主进程维护，避免界面里的旧值把刚写入的同步记录覆盖掉
       delete patch.webdav.lastSyncAt
       delete patch.webdav.lastStatus
       delete patch.webdav.lastError
+      delete patch.webdav.lastRemoteSavedAt
+      delete patch.webdav.lastSyncedHash
     }
     let warning: string | undefined
     const currentHotkey = appStore.getState().settings.general.hotkey
@@ -566,6 +569,11 @@ function registerIpc(): void {
 
   ipcMain.handle('webdav:test', async (_event, settings: WebDAVSettings) => testWebDAV(settings, appFetch))
   ipcMain.handle('webdav:upload', async () => appStore.uploadToWebDAV())
+  ipcMain.handle('webdav:sync', async () => {
+    const result = await appStore.syncWebDAV()
+    if (result.ok && result.action === 'download') syncStickyWindows()
+    return result
+  })
   ipcMain.handle('webdav:restore', async () => {
     const result = await appStore.restoreFromWebDAV()
     if (result.ok) syncStickyWindows()

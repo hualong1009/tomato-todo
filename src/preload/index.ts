@@ -54,6 +54,7 @@ const api: TomatoAPI = {
 
   testWebDAV: (settings: WebDAVSettings) => ipcRenderer.invoke('webdav:test', settings),
   uploadWebDAV: () => ipcRenderer.invoke('webdav:upload'),
+  syncWebDAV: () => ipcRenderer.invoke('webdav:sync'),
   restoreWebDAV: () => ipcRenderer.invoke('webdav:restore'),
 
   exportMarkdown: (input: MarkdownExportInput) => ipcRenderer.invoke('export:markdown', input),

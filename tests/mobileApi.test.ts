@@ -550,6 +550,131 @@ describe('Web 适配层：AI 与 WebDAV', () => {
     expect(h.binaryPut).toHaveBeenCalledTimes(2)
     expect((await api.getState()).settings.webdav.lastStatus).toBe('success')
   })
+
+  it('双向同步：远端有更新且本机无改动时拉取远端', async () => {
+    const api = await freshApi()
+    const base = (await api.getState()).settings.webdav
+    await api.updateSettings({
+      webdav: {
+        ...base,
+        url: 'https://dav.test/remote/',
+        remotePath: 'data.json',
+        enabled: true,
+        autoUpload: false,
+        splitAssets: false
+      }
+    })
+    const remote = JSON.stringify({
+      version: 1,
+      app: 'tomato-todo',
+      savedAt: '2026-01-02T00:00:00.000Z',
+      groups: [{ id: 'inbox', name: '收件箱', color: '#ff6b6b', createdAt: '2026-01-01T00:00:00.000Z' }],
+      todos: [
+        {
+          id: 'remote-sync-1',
+          title: '另一台设备改的',
+          content: '',
+          groupId: 'inbox',
+          urgency: 'medium',
+          expectedAt: null,
+          startedAt: null,
+          completedAt: null,
+          archivedAt: null,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+          pinned: false,
+          pomodoroCount: 0,
+          focusMinutes: 0,
+          focusLog: []
+        }
+      ]
+    })
+    // 先只读主文件判断有无变化，再下载一次内联资源
+    respondBytes(new TextEncoder().encode(remote))
+    respondBytes(new TextEncoder().encode(remote))
+    const result = await api.syncWebDAV()
+    expect(result.ok).toBe(true)
+    expect(result.action).toBe('download')
+    const state = await api.getState()
+    expect(state.todos.map((todo) => todo.title)).toEqual(['另一台设备改的'])
+    expect(state.settings.webdav.lastSyncedHash).toBeTruthy()
+    expect(state.settings.webdav.lastRemoteSavedAt).toBe('2026-01-02T00:00:00.000Z')
+  })
+
+  it('双向同步：本机改动且远端没变时上传', async () => {
+    const api = await freshApi()
+    const base = (await api.getState()).settings.webdav
+    await api.updateSettings({
+      webdav: {
+        ...base,
+        url: 'https://dav.test/remote/',
+        remotePath: 'data.json',
+        enabled: true,
+        autoUpload: false,
+        splitAssets: false
+      }
+    })
+    await api.addTodo({ title: '手机新增' })
+    h.binaryGet.mockResolvedValueOnce({ status: 404, data: '' })
+    respondDAV(201) // MKCOL
+    respond('', 201) // PUT
+    const result = await api.syncWebDAV()
+    expect(result.ok).toBe(true)
+    expect(result.action).toBe('upload')
+    const call = h.request.mock.calls[0][0] as { method: string; data: string }
+    expect(call.method).toBe('PUT')
+    expect(call.data).toContain('手机新增')
+    expect((await api.getState()).settings.webdav.lastSyncedHash).toBeTruthy()
+
+    // 再同步一次：两边一致，不再传输
+    respondBytes(new TextEncoder().encode(call.data))
+    const again = await api.syncWebDAV()
+    expect(again.action).toBe('none')
+  })
+
+  it('双向同步：两端都改过时保留本机数据并覆盖远端', async () => {
+    const api = await freshApi()
+    const base = (await api.getState()).settings.webdav
+    await api.updateSettings({
+      webdav: {
+        ...base,
+        url: 'https://dav.test/remote/',
+        remotePath: 'data.json',
+        enabled: true,
+        autoUpload: false,
+        splitAssets: false
+      }
+    })
+    const first = await api.addTodo({ title: '本机第一版' })
+    // 建立同步基准：远端为空 → 上传
+    h.binaryGet.mockResolvedValueOnce({ status: 404, data: '' })
+    respondDAV(201)
+    respond('', 201)
+    await api.syncWebDAV()
+    expect(first.todos[0].title).toBe('本机第一版')
+
+    // 本机再改
+    await api.addTodo({ title: '本机后续改动' })
+    // 远端被另一台设备覆盖，且 savedAt 更新
+    const remote = JSON.stringify({
+      version: 1,
+      app: 'tomato-todo',
+      savedAt: new Date(Date.now() + 60_000).toISOString(),
+      groups: [{ id: 'inbox', name: '收件箱', color: '#ff6b6b', createdAt: '2026-01-01T00:00:00.000Z' }],
+      todos: []
+    })
+    respondBytes(new TextEncoder().encode(remote))
+    respondDAV(201)
+    respond('', 201)
+    const result = await api.syncWebDAV()
+    expect(result.ok).toBe(true)
+    expect(result.action).toBe('upload')
+    const put = h.request.mock.calls.at(-1)?.[0] as { method: string; data: string }
+    expect(put.method).toBe('PUT')
+    expect(put.data).toContain('本机后续改动')
+    const state = await api.getState()
+    expect(state.todos.map((todo) => todo.title)).toContain('本机后续改动')
+  })
 })
 
 describe('Web 适配层：桌面专属功能降级', () => {

@@ -49,6 +49,8 @@ export interface TomatoAPI {
 
   testWebDAV(settings: WebDAVSettings): Promise<WebDAVTestResult>
   uploadWebDAV(): Promise<WebDAVSyncResult>
+  /** 双向同步：本机有改动就上传，本机没改而远端更新则拉取 */
+  syncWebDAV(): Promise<WebDAVSyncResult>
   restoreWebDAV(): Promise<WebDAVSyncResult>
 
   exportMarkdown(input: MarkdownExportInput): Promise<FileActionResult>

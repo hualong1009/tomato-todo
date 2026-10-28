@@ -21,6 +21,7 @@ function settings(overrides: Partial<WebDAVSettings> = {}): WebDAVSettings {
     username: 'me',
     password: 'secret',
     autoUpload: true,
+    syncIntervalMinutes: 5,
     encryptionPassword: '',
     lastSyncAt: null,
     lastStatus: 'idle',
@@ -165,6 +166,9 @@ describe('上传到 WebDAV', () => {
     )
     expect(calls[1].headers['content-type']).toContain('application/json')
     expect(calls[1].body).toContain('上传任务')
+    // 上传时写入的 savedAt 会作为「远端版本」返回，双向同步靠它判断远端有没有变
+    expect(result.remoteSavedAt).toBeTruthy()
+    expect(JSON.parse(calls[1].body as string).savedAt).toBe(result.remoteSavedAt)
   })
 
   it('已有目录 MKCOL 返回 405 时继续上传', async () => {
@@ -208,7 +212,32 @@ describe('从 WebDAV 下载', () => {
     mockFetch(() => new Response('', { status: 404 }))
     const result = await downloadFromWebDAV(settings())
     expect(result.ok).toBe(false)
+    expect(result.status).toBe(404)
     expect(result.message).toContain('还没有备份文件')
+  })
+
+  it('只读 savedAt 时（inlineAssets: false）不下载 blobs/', async () => {
+    const state = makeState()
+    createTodo(state, {
+      title: '带图片',
+      attachments: [
+        {
+          id: 'a1',
+          name: 'pixel.png',
+          mime: 'image/png',
+          size: 3,
+          data: 'data:image/png;base64,QUJD',
+          createdAt: new Date().toISOString()
+        }
+      ]
+    })
+    const todos = (await import('../src/shared/blobSync')).externaliseAssets(state.todos)
+    const payload = createRemotePayloadWith(state, todos.todos)
+    const calls = mockFetch(() => new Response(payload, { status: 200 }))
+    const result = await downloadFromWebDAV(settings(), undefined, { inlineAssets: false })
+    expect(result.ok).toBe(true)
+    expect(result.savedAt).toBeTruthy()
+    expect(calls.filter((call) => call.url.includes('/blobs/'))).toHaveLength(0)
   })
 
   it('远端内容不是 JSON 时拒绝导入', async () => {
