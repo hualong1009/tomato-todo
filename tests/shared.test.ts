@@ -15,6 +15,11 @@ import {
   updateGroup,
   updateTodo
 } from '../src/shared/operations'
+import {
+  CONTENT_MAX_CHARS,
+  CONTENT_TEXT_LIMIT,
+  contentTextLength
+} from '../src/shared/content'
 import { buildSummaryContext, getRangeBounds } from '../src/shared/summary'
 import { getTodoStatus, isOverdue, taskMatchesStatus } from '../src/shared/todoUtils'
 import type { AddTodoInput, Todo } from '../src/shared/types'
@@ -353,5 +358,49 @@ describe('新建待办携带附件', () => {
     expect(todo.attachments[0]?.name).toBe('文件.zip')
     // 不传附件时为空数组
     expect(createTodo(makeState(), { title: '无附件' }).attachments).toEqual([])
+  })
+})
+
+describe('正文长度限制（图片不计入字数）', () => {
+  const image = (chars: number) => `![图片](data:image/webp;base64,${'A'.repeat(chars)})`
+
+  it('插入大图不再触发「内容不能超过 50000 个字符」', () => {
+    const state = makeState()
+    const content = `今天的情况：\n${image(400_000)}\n收尾。`
+    const todo = createTodo(state, { title: '带一张大图', content })
+    expect(todo.content).toBe(content)
+    // 文字部分只有几十个字符
+    expect(contentTextLength(content)).toBeLessThan(100)
+  })
+
+  it('纯文字超过上限时仍然拒绝', () => {
+    const state = makeState()
+    expect(() =>
+      createTodo(state, { title: '长文本', content: 'a'.repeat(CONTENT_TEXT_LIMIT + 1) })
+    ).toThrow(/不能超过 50000 个字符/)
+    expect(() =>
+      createTodo(state, { title: '刚好到上限', content: 'a'.repeat(CONTENT_TEXT_LIMIT) })
+    ).not.toThrow()
+  })
+
+  it('图片总量过大时提示压缩或删图', () => {
+    const state = makeState()
+    const content = image(CONTENT_MAX_CHARS + 10)
+    expect(() => createTodo(state, { title: '图太多', content })).toThrow(/图片太多或太大/)
+  })
+
+  it('统计会忽略 HTML 图片与裸 data URL', () => {
+    const html = `<img src="data:image/png;base64,${'B'.repeat(200_000)}">文字`
+    expect(contentTextLength(html)).toBeLessThan(20)
+    const bare = `前缀 data:image/png;base64,${'C'.repeat(200_000)} 后缀`
+    expect(contentTextLength(bare)).toBeLessThan(20)
+  })
+
+  it('摘要提示词里内嵌图片被替换成占位符', () => {
+    const state = makeState()
+    createTodo(state, { title: '含图待办', content: `说明\n${image(200_000)}` })
+    const context = buildSummaryContext(state, 'day', Date.now(), { start: '', end: '' })
+    expect(context.todosMarkdown).toContain('[图片]')
+    expect(context.todosMarkdown).not.toContain('base64')
   })
 })

@@ -1898,6 +1898,22 @@
   color: var(--danger);
 }
 
+/* 正文文字计数（只在接近上限时出现，图片不计入） */
+.rich-counter {
+  margin-left: auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.rich-counter.over {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
 /* ============ 本地备份卡片 ============ */
 .backup-card {
   display: flex;

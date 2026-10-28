@@ -1,3 +1,4 @@
+import { CONTENT_MAX_CHARS, CONTENT_TEXT_LIMIT, contentTextLength } from './content'
 import {
   DEFAULT_GROUP_ID,
   DEFAULT_STICKY_COLOR,
@@ -14,12 +15,12 @@ import type {
   Urgency,
   WindowBounds
 } from './types'
+import { isCompleted, isStarted } from './todoUtils'
 
 function createId(): string {
   if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID()
   return `todo-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
-import { isCompleted, isStarted } from './todoUtils'
 
 const ISO_NOW = () => new Date().toISOString()
 
@@ -30,9 +31,18 @@ function cleanTitle(value: unknown): string {
   return title
 }
 
+/**
+ * 校验正文长度。字数只算文字：内嵌图片（base64）按占位符计，
+ * 否则插入一张图就会因为编码后的体积超过 5 万字符而存不下待办。
+ */
 function cleanContent(value: unknown): string {
   const content = String(value ?? '')
-  if (content.length > 50000) throw new Error('待办内容不能超过 50000 个字符')
+  if (contentTextLength(content) > CONTENT_TEXT_LIMIT) {
+    throw new Error(`待办内容不能超过 ${CONTENT_TEXT_LIMIT} 个字符（图片不计入）`)
+  }
+  if (content.length > CONTENT_MAX_CHARS) {
+    throw new Error('待办内容里的图片太多或太大，请压缩或删除部分图片后再试')
+  }
   return content
 }
 

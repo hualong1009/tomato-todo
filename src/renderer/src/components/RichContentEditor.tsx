@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { CONTENT_MAX_CHARS, CONTENT_TEXT_LIMIT, contentTextLength } from '@shared/content'
 import { Markdown } from './Markdown'
 import {
   BoldIcon,
@@ -148,6 +149,11 @@ export function RichContentEditor({
       const start = element?.selectionStart ?? value.length
       const insertion = `${snippets.join('')}`
       const next = `${value.slice(0, start)}${insertion}${value.slice(start)}`
+      // 正文总量（含图片 base64）有上限，插入前先拦住，避免保存时才报错
+      if (next.length > CONTENT_MAX_CHARS) {
+        setError('这条待办的图片已经太多，请先删除部分图片再插入')
+        return
+      }
       applyChange(next, { start: start + insertion.length, end: start + insertion.length })
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '插入图片失败')
@@ -217,6 +223,9 @@ export function RichContentEditor({
   }
 
   const preview = useMemo(() => value, [value])
+  // 字数只算文字（图片按占位符计）：快接近上限时才提示，避免打扰
+  const textLength = useMemo(() => contentTextLength(value), [value])
+  const showCounter = textLength > CONTENT_TEXT_LIMIT * 0.8
 
   return (
     <div className={`rich-editor ${compact ? 'compact' : ''} ${disabled ? 'disabled' : ''}`}>
@@ -262,6 +271,15 @@ export function RichContentEditor({
             >
               <PaperclipIcon size={15} />
             </button>
+          )}
+          {showCounter && (
+            <span
+              className={`rich-counter ${textLength > CONTENT_TEXT_LIMIT ? 'over' : ''}`}
+              title={`正文文字上限 ${CONTENT_TEXT_LIMIT} 字（插入的图片不计入）`}
+              data-testid="rich-counter"
+            >
+              {textLength}/{CONTENT_TEXT_LIMIT}
+            </span>
           )}
           {hasContent && !disabled && (
             <button
