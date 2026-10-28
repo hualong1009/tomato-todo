@@ -29,7 +29,7 @@ npm run build:mac      # 构建 macOS dmg（需在 macOS 上打包）
 npm run dev:web        # 浏览器里预览移动端布局（手机视口）
 npm run build:web      # 构建移动端 Web 资源到 dist-mobile/
 
-npm test               # vitest run（全部单测，210 项）
+npm test               # vitest run（全部单测，215 项）
 npx vitest run tests/shared.test.ts   # 运行单个测试文件
 npm run test:e2e       # 构建 + 全部 e2e（electron-smoke/sticky-window/dropdown-ui/security/mobile-web/mcp-stdio）
 
@@ -89,7 +89,7 @@ build/          # 应用图标（icon.png 1024×1024、icon.ico）
 - 🚫 禁止随意修改 `package-lock.json`（依赖变更时才动；且锁文件源必须保持 registry.npmjs.org 官方源——CI runner 在境外，指向内网镜像会导致流水线失败）
 - 🚫 禁止提交密钥、token、密码等敏感信息
 - 🚫 禁止在 `src/shared/`、`src/renderer/` 引入 Node API（见第 4 节）
-- 🚫 禁止跳过测试直接提交：PR 必须等 CI（typecheck + 210 项单测）通过再合并
+- 🚫 禁止跳过测试直接提交：PR 必须等 CI（typecheck + 215 项单测）通过再合并
 - 🚫 禁止手动修改 `android/gradle/wrapper/gradle-wrapper.properties` 的腾讯镜像配置（本地故意为之，CI workflow 会自动改回官方源，该文件永久排除在提交外）
 - 🚫 禁止在 `android` 布局/manifest 里使用高版本不存在的属性（如 `android:updateWhenScreenOn`，API 36 link 失败）
 - ⚠️ 项目在 OneDrive 同步目录：NSIS 打包输出目录要指向本地盘（`--config.directories.output="D:/tmp/tomato-release"`），避免 EPERM
