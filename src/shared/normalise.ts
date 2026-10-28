@@ -5,6 +5,7 @@ import {
   DEFAULT_STICKY_COLOR,
   DEFAULT_STICKY_OPACITY
 } from './defaults'
+import { clampSyncInterval } from './webdavSync'
 import type {
   AppSettings,
   AppState,
@@ -265,6 +266,7 @@ export function normaliseState(raw: unknown): AppState {
   }
   settings.webdav.enabled = Boolean(settings.webdav.enabled)
   settings.webdav.autoUpload = settings.webdav.autoUpload !== false
+  settings.webdav.syncIntervalMinutes = clampSyncInterval(settings.webdav.syncIntervalMinutes)
   settings.webdav.url = String(settings.webdav.url ?? '')
   settings.webdav.remotePath = String(
     settings.webdav.remotePath || fallback.settings.webdav.remotePath
@@ -276,6 +278,10 @@ export function normaliseState(raw: unknown): AppState {
     typeof settings.webdav.lastSyncAt === 'string' ? settings.webdav.lastSyncAt : null
   settings.webdav.lastError =
     typeof settings.webdav.lastError === 'string' ? settings.webdav.lastError : null
+  settings.webdav.lastRemoteSavedAt =
+    typeof settings.webdav.lastRemoteSavedAt === 'string' ? settings.webdav.lastRemoteSavedAt : null
+  settings.webdav.lastSyncedHash =
+    typeof settings.webdav.lastSyncedHash === 'string' ? settings.webdav.lastSyncedHash : null
   settings.general.closeToTray = settings.general.closeToTray !== false
   settings.general.ignoredUpdateVersion =
     typeof settings.general.ignoredUpdateVersion === 'string' &&

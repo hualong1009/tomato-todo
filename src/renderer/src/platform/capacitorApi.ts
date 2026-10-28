@@ -9,7 +9,12 @@ import { Capacitor, CapacitorHttp, registerPlugin } from '@capacitor/core'
 import { Preferences } from '@capacitor/preferences'
 import type { TomatoAPI } from '../../../shared/api'
 import { callAIChat, listAIModels, testAIConnection } from '../../../shared/aiClient'
-import { createRemotePayload, createRemotePayloadWith, parseRemotePayload } from '../../../shared/backup'
+import {
+  createRemotePayload,
+  createRemotePayloadWith,
+  parseRemotePayload,
+  type RemotePayload
+} from '../../../shared/backup'
 import { browserBackupFormatVersion, decryptBrowserBackup, encryptBrowserBackup } from '../../../shared/browserBackupCrypto'
 import { externaliseAssets } from '../../../shared/blobSync'
 import { createDefaultState, normaliseState } from '../../../shared/normalise'
@@ -32,6 +37,7 @@ import { splitDataUrl } from '../../../shared/attachments'
 import { collectBlobRefs, inlineAttachmentRefs, inlineBlobRefs } from '../../../shared/blobRefs'
 import { buildWidgetSummary } from '../../../shared/widget'
 import { buildSummaryContext } from '../../../shared/summary'
+import { decideWebDAVSync, localFingerprint, shouldAutoSync } from '../../../shared/webdavSync'
 import { evaluateRelease, LATEST_RELEASE_API } from '../../../shared/updates'
 import type {
   AddTodoInput,
@@ -49,6 +55,7 @@ import type {
   SettingsUpdateResult,
   SummaryDates,
   SummaryRange,
+  Todo,
   UpdateTodoPatch,
   WebDAVSettings,
   WebDAVSyncResult,
@@ -67,6 +74,10 @@ function looksEncrypted(text: string): boolean {
 
 const stateListeners = new Set<(state: AppState) => void>()
 const eventListeners = new Set<(event: AppEvent) => void>()
+
+function emitToast(message: string, tone: 'info' | 'success' | 'error' = 'info'): void {
+  for (const listener of eventListeners) listener({ type: 'toast', message, tone })
+}
 
 let state: AppState = createDefaultState()
 
@@ -232,6 +243,8 @@ function loadState(): Promise<void> {
         syncTheme()
         syncWidget()
         setupWebViewInsets()
+        // Store 加载完成后启动定时双向同步（未启用 WebDAV 时自动跳过）
+        startAutoSync()
       })
   }
   return loadPromise as Promise<void>
@@ -498,9 +511,10 @@ async function performWebDAVUpload(settings: WebDAVSettings): Promise<WebDAVSync
     const url = remoteFileUrl(settings)
     // 快照必须在任何 await 之前生成：上传中继续编辑时，后续变动由队列再上传。
     const externalised = settings.splitAssets !== false ? externaliseAssets(state.todos) : null
+    const savedAt = new Date().toISOString()
     const payload = externalised
-      ? createRemotePayloadWith(state, externalised.todos)
-      : createRemotePayload(state)
+      ? createRemotePayloadWith(state, externalised.todos, savedAt)
+      : createRemotePayload(state, savedAt)
     await ensureRemoteDirectory(settings, url)
     let uploaded = 0
     let reused = 0
@@ -554,11 +568,32 @@ async function performWebDAVUpload(settings: WebDAVSettings): Promise<WebDAVSync
     return {
       ok: true,
       message: `${settings.encryptionPassword ? '已加密压缩保存' : '已保存'}到 WebDAV${assetNote}`,
-      at: new Date().toISOString()
+      at: new Date().toISOString(),
+      remoteSavedAt: savedAt,
+      action: 'upload'
     }
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : '上传失败' }
   }
+}
+
+/** 记录一次同步结果：更新状态、本机指纹与远端版本戳，供下次判断是否需要传输。 */
+function applyWebdavSyncResult(result: WebDAVSyncResult, localHash?: string): void {
+  state.settings = mergeSettings({
+    webdav: {
+      ...state.settings.webdav,
+      lastStatus: result.ok ? 'success' : 'error',
+      lastError: result.ok ? null : result.message,
+      lastSyncAt: result.ok
+        ? result.at ?? new Date().toISOString()
+        : state.settings.webdav.lastSyncAt,
+      lastSyncedHash:
+        result.ok && localHash ? localHash : state.settings.webdav.lastSyncedHash ?? null,
+      lastRemoteSavedAt: result.remoteSavedAt ?? state.settings.webdav.lastRemoteSavedAt ?? null
+    }
+  })
+  if (result.ok) lastAutoSyncAt = Date.now()
+  emit()
 }
 
 async function uploadWebDAV(): Promise<WebDAVSyncResult> {
@@ -569,19 +604,15 @@ async function uploadWebDAV(): Promise<WebDAVSyncResult> {
     return { ok: true, message: '正在同步，稍后将自动保存最新数据' }
   }
   uploadInFlight = true
+  // 指纹在 await 之前取：上传过程中继续编辑会有新改动，下次同步会再上传
+  const localHash = localFingerprint(state)
   let result: WebDAVSyncResult
   try {
     result = await performWebDAVUpload(settings)
   } finally {
     uploadInFlight = false
   }
-  state.settings = mergeSettings({ webdav: {
-    ...state.settings.webdav,
-    lastStatus: result.ok ? 'success' : 'error',
-    lastError: result.ok ? null : result.message,
-    lastSyncAt: result.ok ? result.at ?? new Date().toISOString() : state.settings.webdav.lastSyncAt
-  } })
-  emit()
+  applyWebdavSyncResult(result, result.ok ? localHash : undefined)
   if (uploadQueued) {
     uploadQueued = false
     setTimeout(() => { void uploadWebDAV() }, 500)
@@ -589,25 +620,37 @@ async function uploadWebDAV(): Promise<WebDAVSyncResult> {
   return result
 }
 
-async function restoreWebDAV(): Promise<WebDAVSyncResult> {
-  const settings = state.settings.webdav
-  if (!settings.url.trim()) return { ok: false, message: '请先在设置中配置 WebDAV' }
-  if (uploadInFlight) return { ok: false, message: '正在上传，请稍后再恢复远端备份' }
-  if (autoUploadTimer) clearTimeout(autoUploadTimer)
-  autoUploadTimer = null
+interface RemoteDownloadResult {
+  ok: boolean
+  message: string
+  /** 404 表示远端还没有备份文件（首次同步用），不是错误 */
+  status?: number
+  payload?: RemotePayload
+  todos?: Todo[]
+  assetsNote?: string
+}
+
+/** 读取远端主备份；`inlineAssets` 为 false 时只取 savedAt / 待办，不下载 blobs/。 */
+async function downloadRemotePayload(
+  settings: WebDAVSettings,
+  options: { inlineAssets?: boolean } = {}
+): Promise<RemoteDownloadResult> {
   try {
     const url = remoteFileUrl(settings)
     const response = await downloadWebDAVBytes(url, authHeaders(settings))
-    if (response.status === 404) return { ok: false, message: '远端没有找到备份文件' }
+    if (response.status === 404) {
+      return { ok: false, status: 404, message: '远端没有找到备份文件' }
+    }
     if (response.status < 200 || response.status >= 300) {
-      return { ok: false, message: `下载失败：HTTP ${response.status}` }
+      return { ok: false, status: response.status, message: `下载失败：HTTP ${response.status}` }
     }
     const text = await decodeWebDAVBytes(response.bytes, settings.encryptionPassword)
     const payload = parseRemotePayload(text)
     if (!payload) return { ok: false, message: '远端文件不是有效的待办数据' }
     let todos = payload.todos
     let assetsNote = ''
-    const refs = collectBlobRefs(todos)
+    // 双向同步先只读主文件判断有无变化，这时不下 blobs/，避免每 5 分钟拉一遍附件
+    const refs = options.inlineAssets === false ? [] : collectBlobRefs(todos)
     if (refs.length > 0) {
       // 桌面端可能把图片/附件外置成 blobs/（加密时每个 blob 也是 TTENC2）。
       const base = new URL('blobs/', url).toString()
@@ -638,29 +681,191 @@ async function restoreWebDAV(): Promise<WebDAVSyncResult> {
       }))
       if (missing > 0) assetsNote = `，${missing} 个图片/附件下载失败`
     }
-    state = normaliseState({
-      groups: payload.groups,
-      todos,
-      settings: {
-        ...state.settings,
-        webdav: {
-          ...state.settings.webdav,
-          lastStatus: 'success',
-          lastSyncAt: new Date().toISOString(),
-          lastError: null
-        }
-      }
-    })
-    // 恢复不触发自动上传：避免把刚下载的数据立即覆盖回远端。
-    emit()
+    return { ok: true, message: '已读取远端备份', payload, todos, assetsNote }
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : '下载失败' }
+  }
+}
+
+/** 把远端待办/分组应用到本机，并记下同步基准（本机指纹 + 远端 savedAt）。 */
+function applyRemotePayload(payload: RemotePayload, todos: Todo[], remoteSavedAt?: string): void {
+  state = normaliseState({
+    groups: payload.groups,
+    todos,
+    settings: state.settings
+  })
+  applyWebdavSyncResult(
+    {
+      ok: true,
+      message: '已从 WebDAV 读取备份',
+      at: new Date().toISOString(),
+      remoteSavedAt
+    },
+    localFingerprint(state)
+  )
+  // 拉取不触发自动上传：避免刚下载的数据立刻被覆盖回远端。
+  lastAutoSyncAt = Date.now()
+}
+
+async function restoreWebDAV(): Promise<WebDAVSyncResult> {
+  const settings = state.settings.webdav
+  if (!settings.url.trim()) return { ok: false, message: '请先在设置中配置 WebDAV' }
+  if (uploadInFlight) return { ok: false, message: '正在上传，请稍后再恢复远端备份' }
+  if (autoUploadTimer) clearTimeout(autoUploadTimer)
+  autoUploadTimer = null
+  const remote = await downloadRemotePayload(settings)
+  if (!remote.ok || !remote.payload || !remote.todos) {
+    return { ok: false, message: remote.message }
+  }
+  applyRemotePayload(remote.payload, remote.todos, remote.payload.savedAt)
+  await persistNow()
+  return {
+    ok: true,
+    message: `已从 WebDAV 恢复（${remote.payload.todos.length} 条待办）${remote.assetsNote ?? ''}`,
+    at: new Date().toISOString(),
+    remoteSavedAt: remote.payload.savedAt,
+    action: 'download'
+  }
+}
+
+/**
+ * 双向同步：先读远端 savedAt 判断哪边有新数据，再决定上传 / 拉取 / 什么都不做。
+ * 定时同步、切回前台、设置变更后都走这里。
+ */
+async function syncWebDAV(options: { notify?: boolean } = {}): Promise<WebDAVSyncResult> {
+  const settings = state.settings.webdav
+  if (!settings.enabled) return { ok: false, message: 'WebDAV 同步未启用' }
+  if (!settings.url.trim()) return { ok: false, message: '请先在设置中配置 WebDAV' }
+  if (uploadInFlight) {
+    uploadQueued = true
+    return { ok: true, message: '正在同步，稍后会自动同步最新数据', action: 'none' }
+  }
+  uploadInFlight = true
+  try {
+    return await runWebDAVSync(settings, options.notify !== false)
+  } finally {
+    uploadInFlight = false
+    lastAutoSyncAt = Date.now()
+    if (uploadQueued) {
+      uploadQueued = false
+      setTimeout(() => { void uploadWebDAV() }, 500)
+    }
+  }
+}
+
+async function runWebDAVSync(settings: WebDAVSettings, notify: boolean): Promise<WebDAVSyncResult> {
+  const localHash = localFingerprint(state)
+  const preview = await downloadRemotePayload(settings, { inlineAssets: false })
+  if (!preview.ok && preview.status !== 404) {
+    const failed: WebDAVSyncResult = { ok: false, message: preview.message, action: 'none' }
+    applyWebdavSyncResult(failed)
+    return failed
+  }
+  const decision = decideWebDAVSync({
+    localHash,
+    lastSyncedHash: settings.lastSyncedHash,
+    remoteSavedAt: preview.ok ? preview.payload?.savedAt : null,
+    lastRemoteSavedAt: settings.lastRemoteSavedAt,
+    lastSyncAt: settings.lastSyncAt
+  })
+
+  if (decision.action === 'download') {
+    const full = await downloadRemotePayload(settings)
+    if (!full.ok || !full.payload || !full.todos) {
+      const failed: WebDAVSyncResult = { ok: false, message: full.message, action: 'none' }
+      applyWebdavSyncResult(failed)
+      return failed
+    }
+    applyRemotePayload(full.payload, full.todos, full.payload.savedAt)
     await persistNow()
+    emitToast('已从 WebDAV 拉取其他设备的更新', 'info')
     return {
       ok: true,
-      message: `已从 WebDAV 恢复（${payload.todos.length} 条待办）${assetsNote}`,
-      at: payload.savedAt
+      message: '已从 WebDAV 拉取其他设备的更新',
+      at: new Date().toISOString(),
+      remoteSavedAt: full.payload.savedAt,
+      action: 'download'
     }
-  } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : '恢复失败' }
+  }
+
+  if (decision.action === 'upload') {
+    const uploaded = await performWebDAVUpload(settings)
+    applyWebdavSyncResult(uploaded, uploaded.ok ? localHash : undefined)
+    // 定时同步失败不弹提示（每隔几分钟一次会打扰），错误看设置页里的「上次错误」
+    if (!uploaded.ok && notify) emitToast(`WebDAV 同步失败：${uploaded.message}`, 'error')
+    if (uploaded.ok && decision.conflict) {
+      emitToast('本机与远端都有改动，已保留本机数据并覆盖远端', 'info')
+    }
+    return { ...uploaded, action: 'upload' }
+  }
+
+  const current: WebDAVSyncResult = {
+    ok: true,
+    message: '已是最新',
+    at: new Date().toISOString(),
+    remoteSavedAt: preview.payload?.savedAt,
+    action: 'none'
+  }
+  applyWebdavSyncResult(current)
+  return current
+}
+
+/* ------------------------------------------------------------------ */
+/* 定时双向同步                                                        */
+/* ------------------------------------------------------------------ */
+
+let autoSyncTimer: ReturnType<typeof setInterval> | null = null
+let autoSyncKickTimer: ReturnType<typeof setTimeout> | null = null
+let lastAutoSyncAt = 0
+
+/** 切后台时定时器会暂停，离开前把待上传的改动立刻发出去，避免改完就切走导致丢了这次同步。 */
+function flushPendingWebDAVWork(): void {
+  if (autoUploadTimer) {
+    clearTimeout(autoUploadTimer)
+    autoUploadTimer = null
+    void uploadWebDAV()
+  }
+  void persistNow()
+}
+
+async function maybeAutoSync(force = false): Promise<void> {
+  const settings = state.settings.webdav
+  if (!shouldAutoSync(settings)) return
+  if (!force && Date.now() - lastAutoSyncAt < settings.syncIntervalMinutes * 60_000) return
+  lastAutoSyncAt = Date.now()
+  await syncWebDAV({ notify: false })
+}
+
+/** 设置变更后尽快同步一次（延迟合并，避免边输入地址边发请求）。 */
+function scheduleAutoSyncKick(delay = 1500): void {
+  // 定时同步没启动（单测 / 非 DOM 环境）时不做延迟同步
+  if (!autoSyncTimer) return
+  if (autoSyncKickTimer) clearTimeout(autoSyncKickTimer)
+  autoSyncKickTimer = setTimeout(() => {
+    autoSyncKickTimer = null
+    void maybeAutoSync(true)
+  }, delay)
+}
+
+function startAutoSync(): void {
+  // 单测 / 非 DOM 环境不启动定时器：同步由测试显式调用，避免残留定时器干扰
+  if (typeof document === 'undefined' || autoSyncTimer) return
+  autoSyncTimer = setInterval(() => {
+    void maybeAutoSync()
+  }, 60_000)
+  // 启动后先同步一次：另一台设备的更新可以立刻拿到
+  setTimeout(() => { void maybeAutoSync(true) }, 4000)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushPendingWebDAVWork()
+    else void maybeAutoSync()
+  })
+  if (Capacitor.isNativePlatform()) {
+    // 部分机型切后台不触发 visibilitychange，原生 resume 更可靠
+    void import('@capacitor/app')
+      .then(({ App }) => {
+        void App.addListener('resume', () => { void maybeAutoSync() })
+      })
+      .catch(() => undefined)
   }
 }
 
@@ -744,8 +949,22 @@ export function createCapacitorApi(): TomatoAPI {
 
     updateSettings: async (patch: Partial<AppSettings>): Promise<SettingsUpdateResult> => {
       await loadState()
+      const previous = state.settings.webdav
       state.settings = mergeSettings(patch)
+      // 同步状态字段只由本适配层维护，界面里的旧值不能把刚写入的同步记录覆盖掉
+      state.settings = mergeSettings({
+        webdav: {
+          ...state.settings.webdav,
+          lastSyncAt: previous.lastSyncAt,
+          lastStatus: previous.lastStatus,
+          lastError: previous.lastError,
+          lastSyncedHash: previous.lastSyncedHash ?? null,
+          lastRemoteSavedAt: previous.lastRemoteSavedAt ?? null
+        }
+      })
       emit()
+      // 刚填好地址 / 改了同步间隔：尽快同步一次（由决策逻辑决定上传还是拉取）
+      scheduleAutoSyncKick()
       return { state: snapshot() }
     },
     testAI: async (ai): Promise<AIRequestResult> => {
@@ -795,6 +1014,7 @@ export function createCapacitorApi(): TomatoAPI {
 
     testWebDAV,
     uploadWebDAV,
+    syncWebDAV,
     restoreWebDAV,
 
     saveAttachment: async (input: { name: string; dataUrl: string }): Promise<FileActionResult> => {

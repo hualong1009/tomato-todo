@@ -106,6 +106,8 @@ export interface WebDAVSettings {
   username: string
   password: string
   autoUpload: boolean
+  /** 定时双向同步间隔（分钟），0 表示关闭定时同步 */
+  syncIntervalMinutes: number
   /** 非空时上传前用该密码加密备份，下载后用该密码解密 */
   encryptionPassword: string
   /** 是否把正文图片与附件拆成 blobs/ 单独上传（默认开启，避免单文件过大） */
@@ -113,6 +115,10 @@ export interface WebDAVSettings {
   lastSyncAt: string | null
   lastStatus: WebDAVStatus
   lastError: string | null
+  /** 最近一次成功同步时远端备份的 savedAt，用于判断远端是否被其他设备更新 */
+  lastRemoteSavedAt?: string | null
+  /** 最近一次成功同步时本机待办/分组的内容指纹，用于判断本机有无待上传改动 */
+  lastSyncedHash?: string | null
 }
 
 export interface SecuritySettings {
@@ -214,7 +220,12 @@ export interface WebDAVTestResult {
 export interface WebDAVSyncResult {
   ok: boolean
   message: string
+  /** 本次同步完成的时间 */
   at?: string
+  /** 本次同步涉及的远端备份 savedAt（用于双向同步判断） */
+  remoteSavedAt?: string
+  /** 双向同步时的具体动作，便于界面 / 测试区分 */
+  action?: 'upload' | 'download' | 'none'
 }
 
 export interface MarkdownExportInput {

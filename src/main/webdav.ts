@@ -334,7 +334,10 @@ export async function uploadToWebDAV(
       reused = result.reused
     }
 
-    const payload = externalised ? createRemotePayloadWith(state, todos) : createRemotePayload(state)
+    const savedAt = new Date().toISOString()
+    const payload = externalised
+      ? createRemotePayloadWith(state, todos, savedAt)
+      : createRemotePayload(state, savedAt)
     const rawSize = Buffer.byteLength(payload, 'utf8')
     const body: Buffer | string = encrypting
       ? encryptBackup(payload, settings.encryptionPassword)
@@ -362,7 +365,9 @@ export async function uploadToWebDAV(
         message: encrypting
           ? `已加密压缩保存到 WebDAV，共 ${savedText}${assetNote}`
           : `已保存到 WebDAV，共 ${savedText}${assetNote}`,
-        at: new Date().toISOString()
+        at: new Date().toISOString(),
+        remoteSavedAt: savedAt,
+        action: 'upload'
       }
     }
     return { ok: false, message: describeStatus(response.status) }
@@ -376,12 +381,17 @@ export async function uploadToWebDAV(
 
 export async function downloadFromWebDAV(
   settings: WebDAVSettings,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
+  options: { inlineAssets?: boolean } = {}
 ): Promise<{
   ok: boolean
   message: string
   raw?: unknown
   at?: string
+  /** 远端备份的 savedAt，用于判断远端是否被其他设备更新 */
+  savedAt?: string
+  /** HTTP 状态码，404 表示远端还没有备份（不是错误） */
+  status?: number
 }> {
   try {
     const fileUrl = buildRemoteFileUrl(settings)
@@ -393,10 +403,10 @@ export async function downloadFromWebDAV(
       })
     )
     if (response.status === 404) {
-      return { ok: false, message: '远端还没有备份文件' }
+      return { ok: false, message: '远端还没有备份文件', status: 404 }
     }
     if (!response.ok) {
-      return { ok: false, message: describeStatus(response.status) }
+      return { ok: false, message: describeStatus(response.status), status: response.status }
     }
     const buffer = Buffer.from(await response.arrayBuffer())
     let text: string
@@ -422,9 +432,15 @@ export async function downloadFromWebDAV(
       return { ok: false, message: '远端文件不是有效的待办数据' }
     }
 
-    // 外置资源：把 blob 引用换回内嵌 data URL（本地模型保持自包含）
+    const savedAt =
+      typeof (raw as { savedAt?: unknown }).savedAt === 'string'
+        ? ((raw as { savedAt: string }).savedAt)
+        : undefined
+
+    // 外置资源：把 blob 引用换回内嵌 data URL（本地模型保持自包含）。
+    // 双向同步先只读 savedAt 判断有无变化，这时不下载 blobs，避免每次都拉一遍附件。
     const payloadTodos = (raw as { todos?: Todo[] }).todos
-    if (Array.isArray(payloadTodos)) {
+    if (options.inlineAssets !== false && Array.isArray(payloadTodos)) {
       const refs = collectBlobRefs(payloadTodos)
       if (refs.length > 0) {
         const blobsUrl = new URL('blobs/', parentUrl(fileUrl)).toString()
@@ -464,12 +480,13 @@ export async function downloadFromWebDAV(
             ok: true,
             message: `已读取备份，但有 ${missing} 个图片/附件下载失败（远端缺失或密码不符）`,
             raw,
-            at: new Date().toISOString()
+            at: new Date().toISOString(),
+            savedAt
           }
         }
       }
     }
-    return { ok: true, message: '已从 WebDAV 读取备份', raw, at: new Date().toISOString() }
+    return { ok: true, message: '已从 WebDAV 读取备份', raw, at: new Date().toISOString(), savedAt }
   } catch (error) {
     return {
       ok: false,

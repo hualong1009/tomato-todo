@@ -191,6 +191,10 @@ try {
     (await page.locator('[data-testid="setting-webdav-encryption"]').count()) === 1)
   check('手机端可配置图片与附件拆分',
     (await page.locator('[data-testid="setting-webdav-split-assets"]').count()) === 1)
+  check('手机端可设置定时双向同步',
+    (await page.locator('[data-testid="setting-webdav-sync-interval"]').count()) === 1)
+  check('手机端可手动双向同步',
+    (await page.locator('[data-testid="setting-webdav-sync"]').count()) === 1)
 
   // 手机端导出 Markdown：复制到剪贴板
   await page.click('[data-testid="settings-tab-localbackup"]')

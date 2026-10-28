@@ -110,11 +110,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
     username: '',
     password: '',
     autoUpload: true,
+    syncIntervalMinutes: 5,
     encryptionPassword: '',
     splitAssets: true,
     lastSyncAt: null,
     lastStatus: 'idle',
-    lastError: null
+    lastError: null,
+    lastRemoteSavedAt: null,
+    lastSyncedHash: null
   },
   security: {
     passwordHash: '',
