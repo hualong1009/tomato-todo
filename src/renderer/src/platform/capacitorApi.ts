@@ -37,7 +37,12 @@ import { splitDataUrl } from '../../../shared/attachments'
 import { collectBlobRefs, inlineAttachmentRefs, inlineBlobRefs } from '../../../shared/blobRefs'
 import { buildWidgetSummary } from '../../../shared/widget'
 import { buildSummaryContext } from '../../../shared/summary'
-import { decideWebDAVSync, localFingerprint, shouldAutoSync } from '../../../shared/webdavSync'
+import {
+  decideWebDAVSync,
+  localFingerprint,
+  shouldAutoSync,
+  shouldSyncOnChange
+} from '../../../shared/webdavSync'
 import { evaluateRelease, LATEST_RELEASE_API } from '../../../shared/updates'
 import type {
   AddTodoInput,
@@ -502,14 +507,17 @@ let autoUploadTimer: ReturnType<typeof setTimeout> | null = null
 let uploadInFlight = false
 let uploadQueued = false
 
+/**
+ * 本机数据改动后（保存详情、勾选完成、改分组…）约 1.6 秒自动同步一次。
+ * 已经有本机改动，所以跳过「先读远端」的探测，直接上传，少一次请求。
+ */
 function scheduleWebDAVUpload(delay = 1600): void {
-  const settings = state.settings.webdav
   if (autoUploadTimer) clearTimeout(autoUploadTimer)
   autoUploadTimer = null
-  if (!settings.enabled || !settings.autoUpload || !settings.url.trim()) return
+  if (!shouldSyncOnChange(state.settings.webdav)) return
   autoUploadTimer = setTimeout(() => {
     autoUploadTimer = null
-    void uploadWebDAV()
+    void syncWebDAV({ notify: false, dirty: true })
   }, delay)
 }
 
@@ -739,7 +747,7 @@ async function restoreWebDAV(): Promise<WebDAVSyncResult> {
  * 双向同步：先读远端 savedAt 判断哪边有新数据，再决定上传 / 拉取 / 什么都不做。
  * 定时同步、切回前台、设置变更后都走这里。
  */
-async function syncWebDAV(options: { notify?: boolean } = {}): Promise<WebDAVSyncResult> {
+async function syncWebDAV(options: { notify?: boolean; dirty?: boolean } = {}): Promise<WebDAVSyncResult> {
   const settings = state.settings.webdav
   if (!settings.enabled) return { ok: false, message: 'WebDAV 同步未启用' }
   if (!settings.url.trim()) return { ok: false, message: '请先在设置中配置 WebDAV' }
@@ -749,7 +757,7 @@ async function syncWebDAV(options: { notify?: boolean } = {}): Promise<WebDAVSyn
   }
   uploadInFlight = true
   try {
-    return await runWebDAVSync(settings, options.notify !== false)
+    return await runWebDAVSync(settings, options.notify !== false, options.dirty === true)
   } finally {
     uploadInFlight = false
     lastAutoSyncAt = Date.now()
@@ -760,21 +768,31 @@ async function syncWebDAV(options: { notify?: boolean } = {}): Promise<WebDAVSyn
   }
 }
 
-async function runWebDAVSync(settings: WebDAVSettings, notify: boolean): Promise<WebDAVSyncResult> {
+async function runWebDAVSync(
+  settings: WebDAVSettings,
+  notify: boolean,
+  dirty: boolean
+): Promise<WebDAVSyncResult> {
   const localHash = localFingerprint(state)
-  const preview = await downloadRemotePayload(settings, { inlineAssets: false })
-  if (!preview.ok && preview.status !== 404) {
+  // 刚改过本机数据时直接上传，不用先读远端主文件（少一次请求，也省流量）
+  const preview =
+    dirty && settings.lastSyncedHash
+      ? null
+      : await downloadRemotePayload(settings, { inlineAssets: false })
+  if (preview && !preview.ok && preview.status !== 404) {
     const failed: WebDAVSyncResult = { ok: false, message: preview.message, action: 'none' }
     applyWebdavSyncResult(failed)
     return failed
   }
-  const decision = decideWebDAVSync({
-    localHash,
-    lastSyncedHash: settings.lastSyncedHash,
-    remoteSavedAt: preview.ok ? preview.payload?.savedAt : null,
-    lastRemoteSavedAt: settings.lastRemoteSavedAt,
-    lastSyncAt: settings.lastSyncAt
-  })
+  const decision = preview
+    ? decideWebDAVSync({
+        localHash,
+        lastSyncedHash: settings.lastSyncedHash,
+        remoteSavedAt: preview.ok ? preview.payload?.savedAt : null,
+        lastRemoteSavedAt: settings.lastRemoteSavedAt,
+        lastSyncAt: settings.lastSyncAt
+      })
+    : { action: 'upload' as const, conflict: false, reason: '本机有改动，直接上传' }
 
   if (decision.action === 'download') {
     const full = await downloadRemotePayload(settings)
@@ -810,7 +828,7 @@ async function runWebDAVSync(settings: WebDAVSettings, notify: boolean): Promise
     ok: true,
     message: '已是最新',
     at: new Date().toISOString(),
-    remoteSavedAt: preview.payload?.savedAt,
+    remoteSavedAt: preview?.payload?.savedAt,
     action: 'none'
   }
   applyWebdavSyncResult(current)
@@ -830,7 +848,7 @@ function flushPendingWebDAVWork(): void {
   if (autoUploadTimer) {
     clearTimeout(autoUploadTimer)
     autoUploadTimer = null
-    void uploadWebDAV()
+    void syncWebDAV({ notify: false, dirty: true })
   }
   void persistNow()
 }

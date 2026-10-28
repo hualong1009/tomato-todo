@@ -255,6 +255,58 @@ try {
   check('手机端可手动双向同步',
     (await page.locator('[data-testid="setting-webdav-sync"]').count()) === 1)
 
+  // 配置好 WebDAV 后：顶部栏显示同步状态，点一下立即同步，改动后自动同步
+  let davPuts = 0
+  await page.route('https://dav.tomato.test/**', async (route) => {
+    const method = route.request().method()
+    if (method === 'PUT') {
+      davPuts += 1
+      return route.fulfill({ status: 201, body: '' })
+    }
+    if (method === 'GET') return route.fulfill({ status: 404, body: '' })
+    return route.fulfill({ status: 201, body: '' })
+  })
+  check('未配置 WebDAV 时不显示同步状态',
+    (await page.locator('[data-testid="mobile-sync"]').count()) === 0)
+  await page.fill('[data-testid="setting-webdav-url"]', 'https://dav.tomato.test/root/')
+  await page.fill('[data-testid="setting-webdav-path"]', 'tomato-todo/data.json')
+  // 开关是隐藏的原生 checkbox：点它的 label 才会真正切换
+  await page
+    .locator('[data-testid="setting-webdav-enabled"]')
+    .evaluate((el) => el.closest('label')?.click())
+  await page.click('[data-testid="settings-save"]')
+  await page.click('[data-testid="modal-close"]')
+  await page.waitForSelector('[data-testid="mobile-sync"]')
+  check('配置 WebDAV 后顶部栏出现同步状态',
+    (await page.locator('[data-testid="mobile-sync"]').count()) === 1)
+  // 保存设置会触发一次补同步：远端没有备份 → 上传
+  await page.waitForFunction(() =>
+    document.querySelector('[data-testid="mobile-sync"]')?.textContent?.includes('已同步'), null,
+    { timeout: 8000 })
+  check('保存后自动完成首次同步',
+    (await page.locator('[data-testid="mobile-sync"]').innerText()).startsWith('已同步'))
+  check('首次同步上传了主备份文件', davPuts >= 1)
+
+  // 改动待办后自动同步（不需要点同步按钮）
+  const putsBeforeEdit = davPuts
+  await page.click('[data-testid="mobile-tab-todos"]')
+  await page.click('[data-testid="mobile-fab"]')
+  await page.fill('.sheet-composer [data-testid="composer-title"]', '改完自动同步的待办')
+  await page.locator('.sheet-composer [data-testid="composer-submit"]').scrollIntoViewIfNeeded()
+  await page.click('.sheet-composer [data-testid="composer-submit"]')
+  await page.waitForTimeout(2400)
+  check('改动待办后自动同步', davPuts > putsBeforeEdit)
+
+  // 点同步按钮再手动同步一次
+  const putsBeforeTap = davPuts
+  await page.click('[data-testid="mobile-sync"]')
+  await page.waitForSelector('[data-testid="toast"]')
+  await page.waitForTimeout(1200)
+  check('点击同步状态立即同步', davPuts > putsBeforeTap)
+  // 后续步骤仍要操作设置面板，重新打开
+  await page.click('[data-testid="mobile-tab-settings"]')
+  await page.waitForSelector('[data-testid="settings-modal"]')
+
   // 手机端导出 Markdown：复制到剪贴板
   await page.click('[data-testid="settings-tab-localbackup"]')
   await page.waitForSelector('[data-testid="setting-export-md-all"]')

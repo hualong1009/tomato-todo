@@ -55,16 +55,69 @@
   font-size: 19px;
   font-weight: 700;
   letter-spacing: -0.015em;
-  max-width: 62vw;
+  max-width: min(62vw, 100%);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .mobile-topbar-actions {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.mobile-topbar .mobile-title-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mobile-topbar .mobile-title {
+  max-width: 100%;
+}
+
+/* WebDAV 同步状态：图标 + 状态 / 最后同步时间，点一下立即同步 */
+.mobile-sync-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 132px;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.mobile-sync-pill.success {
+  color: #35c48a;
+  border-color: color-mix(in srgb, #35c48a 34%, transparent);
+  background: color-mix(in srgb, #35c48a 12%, transparent);
+}
+
+.mobile-sync-pill.error {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 38%, transparent);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.mobile-sync-pill.idle {
+  color: var(--muted);
+}
+
+.mobile-sync-pill .spinner {
+  width: 11px;
+  height: 11px;
+}
+
+.mobile-sync-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .mobile-topbar-actions .header-icon-btn {

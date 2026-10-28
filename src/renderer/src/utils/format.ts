@@ -169,3 +169,9 @@ export function markdownExcerpt(content: string, limit = 120): string {
     .trim()
   return plain.length > limit ? `${plain.slice(0, limit)}…` : plain
 }
+
+export {
+  syncStatusDetail,
+  syncStatusLabel,
+  type SyncIndicatorSource
+} from '@shared/syncStatus'

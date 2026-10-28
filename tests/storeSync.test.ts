@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AppStore } from '../src/main/store'
 import { createRemotePayload } from '../src/shared/backup'
 import { createTodo } from '../src/shared/operations'
@@ -20,17 +20,19 @@ function makeStore(fetchImpl: typeof fetch): AppStore {
 }
 
 afterEach(() => {
+  vi.useRealTimers()
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
 interface DavServer {
   body: string | null
   puts: number
+  gets: number
   fetch: typeof fetch
 }
 
 function davServer(initial: string | null = null): DavServer {
-  const server = { body: initial, puts: 0 } as DavServer
+  const server = { body: initial, puts: 0, gets: 0 } as DavServer
   server.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const method = (init?.method ?? 'GET').toUpperCase()
     if (method === 'MKCOL') return new Response('', { status: 201 })
@@ -40,6 +42,7 @@ function davServer(initial: string | null = null): DavServer {
       return new Response('', { status: 201 })
     }
     if (method === 'GET') {
+      server.gets += 1
       return server.body
         ? new Response(server.body, { status: 200 })
         : new Response('', { status: 404 })
@@ -129,6 +132,68 @@ describe('桌面端 WebDAV 双向同步', () => {
     expect(server.body).toContain('本机后续改动')
     expect(server.body).not.toContain('其他设备的改动')
     expect(store.getState().todos.map((todo) => todo.title)).toContain('本机后续改动')
+    store.dispose()
+  })
+
+  it('本机改动后约 1.6 秒自动同步，且直接上传不先读远端', async () => {
+    vi.useFakeTimers()
+    const server = davServer()
+    const store = makeStore(server.fetch)
+    store.updateSettings({ webdav: {
+      enabled: true,
+      url: 'https://dav.test/root/',
+      remotePath: 'tomato-todo/data.json',
+      autoUpload: true,
+      syncIntervalMinutes: 5
+    } })
+    // 先建立同步基准（远端为空 → 上传）
+    await store.syncWebDAV()
+    expect(server.puts).toBe(1)
+    // 让「设置变更后 1.5 秒补同步」先跑完，避免影响后面的计数
+    await vi.advanceTimersByTimeAsync(1600)
+
+    const getsBefore = server.gets
+    const putsBefore = server.puts
+    store.mutate((state) => createTodo(state, { title: '改完立刻同步' }))
+    await vi.advanceTimersByTimeAsync(1700)
+    expect(server.puts).toBe(putsBefore + 1)
+    expect(server.body).toContain('改完立刻同步')
+    // 已经知道本机有改动，不需要再探测远端
+    expect(server.gets).toBe(getsBefore)
+    expect(store.getState().settings.webdav.lastStatus).toBe('success')
+    store.dispose()
+  })
+
+  it('关闭「变动后自动同步」后，改动不会自动上传', async () => {
+    vi.useFakeTimers()
+    const server = davServer()
+    const store = makeStore(server.fetch)
+    // configure() 里 autoUpload: false
+    configure(store)
+    await vi.advanceTimersByTimeAsync(1600)
+    const putsBefore = server.puts
+    store.mutate((state) => createTodo(state, { title: '只存本地' }))
+    // 1800ms 已超过 1.6 秒的自动同步延迟；总时长仍小于启动补同步的 4 秒
+    await vi.advanceTimersByTimeAsync(1800)
+    expect(server.puts).toBe(putsBefore)
+    store.dispose()
+  })
+
+  it('关掉定时同步后，本机改动仍然会立即同步', async () => {
+    vi.useFakeTimers()
+    const server = davServer()
+    const store = makeStore(server.fetch)
+    store.updateSettings({ webdav: {
+      enabled: true,
+      url: 'https://dav.test/root/',
+      remotePath: 'tomato-todo/data.json',
+      autoUpload: true,
+      syncIntervalMinutes: 0
+    } })
+    store.mutate((state) => createTodo(state, { title: '定时关掉也要传' }))
+    await vi.advanceTimersByTimeAsync(1700)
+    expect(server.puts).toBe(1)
+    expect(server.body).toContain('定时关掉也要传')
     store.dispose()
   })
 

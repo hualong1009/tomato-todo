@@ -852,7 +852,7 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast, onChec
               <section className="settings-section">
                 <h3>WebDAV 备份</h3>
                 <p className="settings-desc">
-                  支持双向同步：本机有改动自动上传，其他设备改过则定时拉取。远端备份不包含 AI 密钥与 WebDAV 密码。
+                  支持双向同步：本机一有改动就自动同步，其他设备改过则定时拉取，桌面端标题栏与手机端顶部栏都会显示同步状态和最后同步时间。远端备份不包含 AI 密钥与 WebDAV 密码。
                 </p>
                 <label className="toggle-row">
                   <input
@@ -949,8 +949,8 @@ export function SettingsModal({ open, settings, onClose, onSave, onToast, onChec
                   />
                   <span className="toggle-ui" />
                   <span>
-                    <strong>自动上传</strong>
-                    <small>本机变动后约 1.6 秒自动上传；关闭后改动会在下次定时同步时一起上传</small>
+                    <strong>变动后自动同步</strong>
+                    <small>保存详情、勾选完成、改分组等改动后约 1.6 秒自动同步（先上传本机改动）；关闭后改动会在下次定时同步时一起上传</small>
                   </span>
                 </label>
                 <label className="field">

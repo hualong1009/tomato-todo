@@ -21,6 +21,9 @@ import {
   ArchiveIcon,
   CheckIcon,
   ChevronDownIcon,
+  CloudCheckIcon,
+  CloudIcon,
+  CloudOffIcon,
   DownloadIcon,
   FolderIcon,
   LayersIcon,
@@ -51,7 +54,13 @@ import { TitleBar } from './components/TitleBar'
 import { TodoComposer } from './components/TodoComposer'
 import { TodoList, type TodoSection } from './components/TodoList'
 import { UpdateDialog } from './components/UpdateDialog'
-import { cleanError, formatClock } from './utils/format'
+import {
+  cleanError,
+  formatClock,
+  syncStatusDetail,
+  syncStatusLabel,
+  type SyncIndicatorSource
+} from './utils/format'
 
 interface ConfirmState {
   title: string
@@ -106,6 +115,7 @@ export default function App() {
   const [viewSheet, setViewSheet] = useState(false)
   const [composerSheet, setComposerSheet] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [syncBusy, setSyncBusy] = useState(false)
   const composerRef = useRef<HTMLInputElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const completingRef = useRef(false)
@@ -739,10 +749,26 @@ export default function App() {
   const overdueCount = state.todos.filter(
     (todo) => !todo.archivedAt && isOverdue(todo, now)
   ).length
-  const syncState = {
+  const syncState: SyncIndicatorSource = {
     enabled: state.settings.webdav.enabled,
     status: state.settings.webdav.lastStatus,
-    lastSyncAt: state.settings.webdav.lastSyncAt
+    lastSyncAt: state.settings.webdav.lastSyncAt,
+    lastError: state.settings.webdav.lastError
+  }
+  /** 手机端顶部栏只在真正配置了 WebDAV 时显示同步状态 */
+  const showSyncPill = isMobile && state.settings.webdav.enabled && Boolean(state.settings.webdav.url.trim())
+
+  const syncNow = async () => {
+    if (syncBusy) return
+    setSyncBusy(true)
+    try {
+      const result = await window.api.syncWebDAV()
+      showToast(result.message, result.ok ? 'success' : 'error')
+    } catch (error) {
+      showToast(cleanError(error), 'error')
+    } finally {
+      setSyncBusy(false)
+    }
   }
 
   const todoListElement = (
@@ -807,6 +833,28 @@ export default function App() {
               <ChevronDownIcon size={15} />
             </button>
             <div className="mobile-topbar-actions">
+              {showSyncPill && (
+                <button
+                  className={`mobile-sync-pill ${syncBusy ? 'idle' : syncState.status}`}
+                  onClick={() => void syncNow()}
+                  title={syncStatusDetail(syncState)}
+                  aria-label={syncStatusDetail(syncState)}
+                  data-testid="mobile-sync"
+                >
+                  {syncBusy ? (
+                    <span className="spinner" />
+                  ) : syncState.status === 'error' ? (
+                    <CloudOffIcon size={13} />
+                  ) : syncState.status === 'success' ? (
+                    <CloudCheckIcon size={13} />
+                  ) : (
+                    <CloudIcon size={13} />
+                  )}
+                  <span className="mobile-sync-text">
+                    {syncBusy ? '同步中' : syncStatusLabel(syncState)}
+                  </span>
+                </button>
+              )}
               <button
                 className={`header-icon-btn ${searchOpen ? 'active' : ''}`}
                 onClick={() => {
