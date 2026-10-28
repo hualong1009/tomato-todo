@@ -85,6 +85,31 @@ check(
   (await page.locator('[data-testid="detail-urgency"]').innerText()).length > 0
 )
 
+// 详情面板带 backdrop-filter / 动画残留的 transform，会成为 position: fixed 的
+// 包含块：弹层必须挂到 body，否则会被顶到面板外面（「点下拉布局就乱」）。
+const dTrigBox = await page.locator('[data-testid="detail-urgency"]').boundingBox()
+const dMenuBox = await dmenu.boundingBox()
+const dPanelBox = await page.locator('.detail-panel').boundingBox()
+check('detail menu aligns with trigger', Math.abs(dMenuBox.x - dTrigBox.x) < 8)
+check(
+  'detail menu right below trigger',
+  dMenuBox.y > dTrigBox.y + dTrigBox.height - 2 && dMenuBox.y < dTrigBox.y + dTrigBox.height + 26
+)
+check(
+  'detail menu stays inside panel',
+  dMenuBox.x + dMenuBox.width <= dPanelBox.x + dPanelBox.width + 4
+)
+
+// 选择后触发按钮要立刻显示新值
+const beforeUrgency = await page.locator('[data-testid="detail-urgency"]').innerText()
+await dmenu.locator('.dropdown-option').nth(1).click()
+await page.waitForTimeout(200)
+check(
+  'detail urgency applies selection',
+  (await page.locator('[data-testid="detail-urgency"]').innerText()) !== beforeUrgency
+)
+check('detail menu closed after select', (await dmenu.count()) === 0)
+
 // --- 点击外部关闭 ---
 await page.mouse.click(600, 520)
 await page.waitForTimeout(200)

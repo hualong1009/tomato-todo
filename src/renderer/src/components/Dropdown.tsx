@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { useBackDismiss } from '../platform/backNavigation'
 import { CheckIcon, ChevronDownIcon } from './Icons'
 
 export interface DropdownOption {
@@ -44,6 +46,9 @@ export function Dropdown({
 
   const selected = options.find((option) => option.value === value) ?? options[0]
 
+  // 手机端返回键先收起下拉选项，而不是直接关掉整个详情面板
+  useBackDismiss(open, () => setOpen(false))
+
   const updatePosition = useCallback(() => {
     const trigger = triggerRef.current
     if (!trigger) return
@@ -83,12 +88,19 @@ export function Dropdown({
         setOpen(false)
       }
     }
+    // 弹层挂在 body 上，不跟随面板 / 列表滚动，所以外层一滚动就收起，避免停在错位置
+    const onScroll = (event: Event) => {
+      if (listRef.current?.contains(event.target as Node)) return
+      setOpen(false)
+    }
     window.addEventListener('mousedown', onPointerDown)
     window.addEventListener('wheel', onWheel, { passive: true })
+    window.addEventListener('scroll', onScroll, true)
     window.addEventListener('resize', updatePosition)
     return () => {
       window.removeEventListener('mousedown', onPointerDown)
       window.removeEventListener('wheel', onWheel)
+      window.removeEventListener('scroll', onScroll, true)
       window.removeEventListener('resize', updatePosition)
     }
   }, [open, updatePosition])
@@ -168,6 +180,59 @@ export function Dropdown({
       }
     : undefined
 
+  // 弹层挂到 body：详情面板带 backdrop-filter 与动画残留的 transform，
+  // 会成为 position: fixed 的包含块，把弹层顶到面板外面（桌面端「点下拉就乱」）。
+  const menu = (
+    <div
+      ref={listRef}
+      className="dropdown-menu"
+      style={style}
+      role="listbox"
+      data-testid={testId ? `${testId}-menu` : undefined}
+    >
+      {options.map((option, index) => {
+        const isSelected = option.value === value
+        const isActive = index === activeIndex
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="option"
+            aria-selected={isSelected}
+            className={`dropdown-option${isSelected ? ' selected' : ''}${isActive ? ' active' : ''}`}
+            onMouseEnter={() => setActiveIndex(index)}
+            onClick={() => commit(option.value)}
+            data-testid={testId ? `${testId}-option-${option.value}` : undefined}
+          >
+            {option.color ? (
+              option.short ? (
+                <span
+                  className="dropdown-badge"
+                  style={{
+                    color: option.color,
+                    background: `color-mix(in srgb, ${option.color} 16%, transparent)`,
+                    borderColor: `color-mix(in srgb, ${option.color} 34%, transparent)`
+                  }}
+                >
+                  {option.short}
+                </span>
+              ) : (
+                <span className="dropdown-dot" style={{ background: option.color }} />
+              )
+            ) : null}
+            <span className="dropdown-option-text">
+              <span className="dropdown-option-label">{option.label}</span>
+              {option.description ? (
+                <span className="dropdown-option-desc">{option.description}</span>
+              ) : null}
+            </span>
+            {isSelected ? <CheckIcon size={13} /> : null}
+          </button>
+        )
+      })}
+    </div>
+  )
+
   return (
     <>
       <button
@@ -199,56 +264,7 @@ export function Dropdown({
         <span className="dropdown-value">{selected?.label}</span>
         <ChevronDownIcon size={13} className={`dropdown-chevron${open ? ' flipped' : ''}`} />
       </button>
-      {open && position ? (
-        <div
-          ref={listRef}
-          className="dropdown-menu"
-          style={style}
-          role="listbox"
-          data-testid={testId ? `${testId}-menu` : undefined}
-        >
-          {options.map((option, index) => {
-            const isSelected = option.value === value
-            const isActive = index === activeIndex
-            return (
-              <button
-                key={option.value}
-                type="button"
-                role="option"
-                aria-selected={isSelected}
-                className={`dropdown-option${isSelected ? ' selected' : ''}${isActive ? ' active' : ''}`}
-                onMouseEnter={() => setActiveIndex(index)}
-                onClick={() => commit(option.value)}
-                data-testid={testId ? `${testId}-option-${option.value}` : undefined}
-              >
-                {option.color ? (
-                  option.short ? (
-                    <span
-                      className="dropdown-badge"
-                      style={{
-                        color: option.color,
-                        background: `color-mix(in srgb, ${option.color} 16%, transparent)`,
-                        borderColor: `color-mix(in srgb, ${option.color} 34%, transparent)`
-                      }}
-                    >
-                      {option.short}
-                    </span>
-                  ) : (
-                    <span className="dropdown-dot" style={{ background: option.color }} />
-                  )
-                ) : null}
-                <span className="dropdown-option-text">
-                  <span className="dropdown-option-label">{option.label}</span>
-                  {option.description ? (
-                    <span className="dropdown-option-desc">{option.description}</span>
-                  ) : null}
-                </span>
-                {isSelected ? <CheckIcon size={13} /> : null}
-              </button>
-            )
-          })}
-        </div>
-      ) : null}
+      {open && position ? createPortal(menu, document.body) : null}
     </>
   )
 }
