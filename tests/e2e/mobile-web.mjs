@@ -134,6 +134,33 @@ try {
   check('手机详情不显示固定便签和桌面便签样式',
     (await page.locator('[data-testid="detail-pin"]').count()) === 0 &&
     (await page.locator('.detail-note-style').count()) === 0)
+  // 详情里的分组 / 紧急程度下拉：手机端点选项必须立刻生效
+  // （曾经因为状态快照引用不变，React 跳过重渲染，看起来像「点了没反应」）
+  await page.evaluate(() => window.api.addGroup('字节项目'))
+  await page.waitForTimeout(200)
+  const groupTrigger = page.locator('[data-testid="detail-group"]')
+  const groupTriggerBox = await groupTrigger.boundingBox()
+  await groupTrigger.tap()
+  const groupMenu = page.locator('[data-testid="detail-group-menu"]')
+  await groupMenu.waitFor()
+  const groupMenuBox = await groupMenu.boundingBox()
+  check('手机端分组弹层对齐触发按钮',
+    Math.abs(groupMenuBox.x - groupTriggerBox.x) < 8 &&
+    groupMenuBox.y > groupTriggerBox.y)
+  // 新建的分组排在最后，选它
+  await groupMenu.locator('.dropdown-option').last().tap()
+  await page.waitForTimeout(300)
+  check('手机端可选择所属分组',
+    (await groupTrigger.innerText()).includes('字节项目'))
+  const urgencyTrigger = page.locator('[data-testid="detail-urgency"]')
+  const beforeUrgency = await urgencyTrigger.innerText()
+  await urgencyTrigger.tap()
+  await page.locator('[data-testid="detail-urgency-menu"]').waitFor()
+  await page.locator('[data-testid="detail-urgency-menu"] .dropdown-option').last().tap()
+  await page.waitForTimeout(300)
+  check('手机端可选择紧急程度',
+    (await urgencyTrigger.innerText()) !== beforeUrgency)
+
   await page.click('[data-testid="detail-edit"]')
   await page.waitForSelector('[data-testid="rich-tool-bold"]')
   check('富文本工具栏存在', (await page.locator('[data-testid="rich-tool-bold"]').count()) === 1)

@@ -196,8 +196,15 @@ function syncWidget(): void {
 let loadPromise: Promise<void> | null = null
 let saveTimer: number | undefined
 
+/**
+ * 返回状态快照。
+ *
+ * 状态操作是原地修改 `state` 的，如果直接把同一个对象交出去，React 的
+ * `setState` 会因为 `Object.is` 相等而跳过重渲染——手机端就会出现「下拉框
+ * 选了分组但界面还是旧值」。所以每次都返回新的对象 / 数组引用。
+ */
 function snapshot(): AppState {
-  return state
+  return { ...state, groups: [...state.groups], todos: [...state.todos] }
 }
 
 function emit(): void {
@@ -205,7 +212,7 @@ function emit(): void {
   syncWidget()
   syncTheme()
   setupWebViewInsets()
-  for (const listener of stateListeners) listener(state)
+  for (const listener of stateListeners) listener(snapshot())
 }
 
 function persistNow(): Promise<void> {

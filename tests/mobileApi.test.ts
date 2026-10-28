@@ -139,6 +139,25 @@ describe('Web 适配层：状态与持久化', () => {
     expect(state.todos[0].title).toBe('持久化任务')
   })
 
+  it('状态快照每次都返回新引用（否则 React 会跳过重渲染）', async () => {
+    const api = await freshApi()
+    const first = await api.getState()
+    const second = await api.getState()
+    expect(second).not.toBe(first)
+
+    const seen: unknown[] = []
+    api.onStateChanged((next) => seen.push(next))
+    const created = await api.addTodo({ title: '引用检查', groupId: 'inbox' })
+    const id = created.todos[0].id
+    const updated = await api.updateTodo(id, { urgency: 'high', groupId: 'inbox' })
+    expect(updated.todos[0].urgency).toBe('high')
+    // 每次返回 / 广播都必须是新对象，且待办数组也换了引用
+    expect(updated).not.toBe(created)
+    expect(updated.todos).not.toBe(created.todos)
+    expect(seen).toHaveLength(2)
+    expect(seen[1]).not.toBe(seen[0])
+  })
+
   it('完成 / 归档 / 恢复 / 永久删除 流程', async () => {
     const api = await freshApi()
     const created = await api.addTodo({ title: '流程任务', groupId: 'inbox' })
