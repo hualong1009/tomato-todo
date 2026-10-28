@@ -1,3 +1,4 @@
+import { describeInlineImages } from './content'
 import { URGENCY_META } from './defaults'
 import type { AppState, SummaryDates, SummaryRange, Todo } from './types'
 import { getTodoStatus, isOverdue } from './todoUtils'
@@ -215,7 +216,8 @@ export function buildSummaryContext(
       `开始：${formatDateTime(todo.startedAt)}`,
       `完成：${formatDateTime(todo.completedAt)}`
     ]
-    const excerpt = truncate(todo.content, 180)
+    // 内嵌图片的 base64 不能进提示词：既占 token 又没信息量
+    const excerpt = truncate(describeInlineImages(todo.content, '[图片]'), 180)
     return `- ${parts.join('｜')}${excerpt ? `\n  内容：${excerpt}` : ''}`
   })
 

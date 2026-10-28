@@ -148,6 +148,36 @@ try {
   await page.waitForSelector('[data-testid="rich-preview"] strong')
   check('预览渲染加粗', true)
   await page.click('[data-testid="rich-mode-edit"]')
+  // 正文插图：图片是 base64，编码后远超 5 万字符，不能算进「正文文字上限」
+  const noise = await page.evaluate(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 1200
+    canvas.height = 1200
+    const context = canvas.getContext('2d')
+    const image = context.createImageData(1200, 1200)
+    for (let i = 0; i < image.data.length; i += 4) {
+      image.data[i] = Math.random() * 255
+      image.data[i + 1] = Math.random() * 255
+      image.data[i + 2] = Math.random() * 255
+      image.data[i + 3] = 255
+    }
+    context.putImageData(image, 0, 0)
+    return canvas.toDataURL('image/png')
+  })
+  const pngBuffer = Buffer.from(noise.split(',')[1], 'base64')
+  check('测试图片编码后远超 5 万字符', pngBuffer.length * 1.37 > 50_000)
+  await page.setInputFiles('[data-testid="rich-image-input"]', {
+    name: 'noise.png',
+    mimeType: 'image/png',
+    buffer: pngBuffer
+  })
+  await page.waitForFunction(() => {
+    const value = document.querySelector('[data-testid="detail-content"]')?.value ?? ''
+    return value.includes('data:image/')
+  })
+  const withImage = await page.locator('[data-testid="detail-content"]').inputValue()
+  check('大图已插入正文', withImage.length > 50_000)
+  check('插入大图不报错', (await page.locator('.rich-hint.error').count()) === 0)
   // 附件：编辑态可添加，保存后预览态可下载
   await page.setInputFiles('[data-testid="attachment-input"]', {
     name: '说明.txt',
@@ -159,6 +189,8 @@ try {
   await page.click('[data-testid="detail-save"]')
   await page.waitForSelector('[data-testid="detail-content-view"]')
   check('保存后回到预览', (await page.locator('[data-testid="detail-content"]').count()) === 0)
+  check('带大图的正文保存成功并渲染图片',
+    (await page.locator('[data-testid="detail-content-view"] img').count()) === 1)
   check(
     '预览态保留附件且可下载',
     (await page.locator('[data-testid="attachment-download"]').count()) === 1
