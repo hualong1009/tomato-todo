@@ -149,7 +149,7 @@ cd android && gradlew assembleRelease
 ## 测试
 
 ```bash
-npm test          # 225 个单元 / 集成测试（共享逻辑、持久化、WebDAV 双向同步、Store、MCP、加密、附件、外置资源、正文长度、小组件摘要、AI 范围、提示词模板、适配层、返回键栈）
+npm test          # 227 个单元 / 集成测试（共享逻辑、持久化、WebDAV 双向同步、Store、MCP、加密、附件、外置资源、正文长度、小组件摘要、AI 范围、提示词模板、适配层、返回键栈）
 npm run test:e2e  # 构建后跑桌面端 Electron + 移动端 Web 的 Playwright 测试
 ```
 
