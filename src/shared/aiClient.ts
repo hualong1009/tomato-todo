@@ -154,8 +154,16 @@ export async function callAIChat(
     return result.trim()
   }
 
-  const choices = (payload as { choices?: { message?: { content?: unknown } }[] }).choices
-  const rawContent = choices?.[0]?.message?.content
+  // OpenAI 兼容网关的 reasoning 模型通常把思考过程放在 reasoning_content，
+  // 最终回答仍在 content。思考过程不应作为回顾结果展示，但可据此给出准确报错。
+  const choices = (payload as {
+    choices?: {
+      finish_reason?: unknown
+      message?: { content?: unknown; reasoning_content?: unknown; reasoning?: unknown }
+    }[]
+  }).choices
+  const choice = choices?.[0]
+  const rawContent = choice?.message?.content
   let result = ''
   if (typeof rawContent === 'string') {
     result = rawContent
@@ -170,7 +178,19 @@ export async function callAIChat(
       })
       .join('')
   }
-  if (!result.trim()) throw new Error('AI 接口没有返回文本内容')
+  if (!result.trim()) {
+    const reasoning = choice?.message?.reasoning_content ?? choice?.message?.reasoning
+    const hasReasoning = typeof reasoning === 'string' && reasoning.trim().length > 0
+    const wasTruncated = choice?.finish_reason === 'length'
+    if (hasReasoning || wasTruncated) {
+      throw new Error(
+        `AI 模型${hasReasoning ? '只返回了思考过程，' : ''}尚未生成最终文本${
+          wasTruncated ? '（输出长度已用尽）' : ''
+        }。请提高输出长度，或在模型 / 网关中关闭思考模式后重试。`
+      )
+    }
+    throw new Error('AI 接口没有返回文本内容')
+  }
   return result.trim()
 }
 
@@ -221,6 +241,7 @@ export async function testAIConnection(settings: AISettings, fetchImpl?: typeof 
         content: '这是一次连接测试。请只回复四个字：连接成功'
       }
     ],
-    { maxTokens: 32, temperature: 0, timeoutMs: 30000, fetchImpl }
+    // reasoning 模型会先消耗 token 生成 reasoning_content；32 token 经常不够走到最终回答。
+    { maxTokens: 512, temperature: 0, timeoutMs: 60000, fetchImpl }
   )
 }

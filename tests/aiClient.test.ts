@@ -122,6 +122,42 @@ describe('AI 对话调用', () => {
     await expect(testAIConnection(settings())).resolves.toBe('连接成功')
   })
 
+  it('reasoning 模型有最终 content 时只返回最终回答，并给连接测试足够输出空间', async () => {
+    const calls = mockFetch(
+      new Response(
+        JSON.stringify({
+          choices: [{
+            finish_reason: 'stop',
+            message: { reasoning_content: '先判断这是连接测试。', content: '连接成功' }
+          }]
+        }),
+        { status: 200 }
+      )
+    )
+    await expect(testAIConnection(settings())).resolves.toBe('连接成功')
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual(expect.objectContaining({
+      max_tokens: 512,
+      temperature: 0
+    }))
+  })
+
+  it('reasoning 模型在最终回答前耗尽输出时给出可操作提示', async () => {
+    mockFetch(
+      new Response(
+        JSON.stringify({
+          choices: [{
+            finish_reason: 'length',
+            message: { reasoning_content: '这里是尚未完成的思考。', content: null }
+          }]
+        }),
+        { status: 200 }
+      )
+    )
+    await expect(callAIChat(settings(), [{ role: 'user', content: 'hi' }])).rejects.toThrow(
+      /只返回了思考过程.*输出长度已用尽/
+    )
+  })
+
   it('解析 Anthropic 响应文本', async () => {
     mockFetch(
       new Response(
